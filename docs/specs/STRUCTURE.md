@@ -52,9 +52,18 @@ App/
 ├── JustScanApp.swift              @main. Builds the container, injects AppContainer.
 ├── AppContainer.swift        Every service and repository, constructed once.
 ├── RootTabView.swift         Jual · Produk · Riwayat. Jual selected on launch.
-├── Info.plist                NSCameraUsageDescription, NSContactsUsageDescription (id)
-└── Assets.xcassets
+└── StoreUnavailableView.swift  Shown only when the store will not load (01 §8).
 ```
+
+`Info.plist` and `Assets.xcassets` sit at the target root, not in `App/` — the
+Xcode target's `INFOPLIST_FILE` points there, and the file is the one member
+excluded from the synchronized group.
+
+**Why `BarcodeScanPresenter`, not `DataScannerView`.** This file was specced as a
+`UIViewControllerRepresentable`. It is a presenter instead, because the exported
+contract is `ScannerServicing.scan() async throws -> String?` — a value a
+ViewModel awaits. A representable would put scanner lifetime and results in the
+*view*, which inverts the layering rule. Changed in session 1.
 
 `AppContainer` is the only place a concrete service is constructed. Views receive it through `@Environment`. This is what makes `InMemoryProductRepository` substitutable in tests without a DI framework.
 
@@ -81,7 +90,7 @@ Core/
 ├── Barcode/
 │   ├── BarcodeKind.swift              .gtin / .internalCode / .unknown
 │   ├── ScannerService.swift           protocol + concrete
-│   └── DataScannerView.swift          UIViewControllerRepresentable wrapper
+│   └── BarcodeScanPresenter.swift     DataScannerViewController wrapper
 ├── Contacts/                          ← module 02. ONLY folder importing Contacts.
 │   ├── ContactRef.swift
 │   ├── ContactService.swift           protocol + concrete
@@ -193,7 +202,7 @@ Real enforcement would mean local SPM packages, one per module, with explicit de
 
 | Session | Module | Creates |
 |---|---|---|
-| 1 | 01 App shell | `App/`, `Core/Money`, `Core/Time`, `Core/Barcode`, `Core/Errors`, `Core/Persistence` (protocols only), `Core/Debug`, `JustScanTests/Support`, `JustScanTests/Core` |
+| 1 | 01 App shell | `App/`, `Models/` (storage-only declarations), `Core/Money`, `Core/Time`, `Core/Barcode`, `Core/Stock/StockReason`, `Core/Errors`, `Core/Persistence`, `Core/Debug`, `JustScanTests/Support`, `JustScanTests/Core`, `JustScanTests/Debug` |
 | 2 | 02 Contact link | `Core/Contacts/` |
 | 3 | 03 Catalogue | `Models/Product`, `Models/StockMovement`, `Core/Stock/`, the two repositories, `Features/Catalogue/`, `JustScanTests/Catalogue/` |
 | 4 | 04 Sale | `Models/Sale`, `Models/SaleLine`, `SaleRepository`, `Features/Sale/`, `JustScanTests/Sale/` |

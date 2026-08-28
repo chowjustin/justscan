@@ -23,6 +23,7 @@ Append-only. Never edit a locked row — supersede it with a new one and note th
 | D-15 | `SaleLine` snapshots name and price; `productID` is a weak `UUID?`, not a relationship | A product edit or deletion must be structurally incapable of altering financial history | 2026-08-21 | 03, 04, 05 |
 | D-16 | All day boundaries are Asia/Jakarta | Grouping on UTC splits a trading day in half | 2026-08-21 | 04, 05 |
 | D-17 | Sale numbers are `{YYYYMMDD}-{NNN}`, no gaps, no reuse; voided sales keep their number | A gap in a receipt sequence is indistinguishable from a hidden sale | 2026-08-21 | 04 |
+| D-18 | CloudKit is enabled from session 1, not at the end | An incompatible schema still compiles; the failure only arrives when a CloudKit-backed store loads (`NSCocoaErrorDomain 134060`). Enabling it on day one makes every launch a schema validation. Supersedes the "capability stays off" line in 01 §1. | 2026-08-28 | 01, all |
 
 ## Deferred (Later)
 
@@ -54,5 +55,8 @@ Interview closed with no open questions. Any `⚠️ OPEN` marker that appears i
 
 | Date | Reversal |
 |---|---|
+| 2026-08-28 | `01 §1`'s "no persistence models" non-goal. It could not survive its own §5, which names all four `@Model` types in the `Schema`, nor AC-01-6 and AC-01-8, which insert and seed them. Session 1 now declares the four types as **storage only** — zero behaviour, every rule still owned by 03 and 04. |
+| 2026-08-28 | `01 §1`'s "the capability stays off". Contradicted by `CLOUDKIT_CHECKLIST.md` Part 4 and by the repo's own entitlements, which already declared `iCloud.chow.JustScan`. Superseded by D-18: CloudKit on from session 1, with R-01-9's local-only fallback so it can never stop the shop trading. |
+| 2026-08-28 | `STRUCTURE.md`'s `DataScannerView.swift` as a `UIViewControllerRepresentable`. The exported contract is `scan() async throws -> String?`, which a representable cannot satisfy without moving scanner lifetime into the view. Replaced by `BarcodeScanPresenter.swift`. |
 | 2026-08-21 | Dropped `@Attribute(.unique) var barcode` from the module 03 draft. It works locally and fails **silently** the day CloudKit is enabled (D-03). Superseded by D-10. |
 | 2026-08-21 | Dropped the bare `stockQty` counter. A void (D-06) would have moved stock with no record, contradicting the audit trail the same decision demanded. Superseded by D-04. |

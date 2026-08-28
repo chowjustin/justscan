@@ -12,9 +12,9 @@ Everything the other four modules stand on: the SwiftData container, the money t
 
 **Non-goals**
 
-- No entities, no persistence models — those belong to 03 and 04.
+- No entity *behaviour* — no rules, no validation, no mutation. Those belong to 03 and 04. The four `@Model` declarations are created here only because the `Schema` in §5 cannot exist without them (see §5).
 - No business rules of any kind.
-- No CloudKit container, no sync code. The schema is CloudKit-*shaped* (foundations §6), but the capability stays off.
+- No sync *code*, no conflict resolution, no migration tooling. The CloudKit **capability is on from session 1** (D-18) so that every launch validates the schema — but nothing in this module reads, writes, or waits on the network. See R-01-9 and `CLOUDKIT_CHECKLIST.md` Part 4.
 - No design system beyond system fonts and colours. Visual polish is not this module.
 - No onboarding, no settings screen.
 
@@ -47,22 +47,34 @@ Single operator, no auth (foundations §3). No permission matrix in this or any 
 | R-01-5 | `POSError` (foundations §7) is the only error type crossing a service boundary. A repository may throw SwiftData errors; the service wraps them in `.persistenceFailed`. |
 | R-01-6 | The scanner accepts exactly: `ean13`, `ean8`, `upce`, `code128`. Any other symbology is ignored, not reported. |
 | R-01-7 | `Info.plist` declares `NSCameraUsageDescription` and `NSContactsUsageDescription` in Indonesian. A missing key is a launch-time crash on first use. |
-| R-01-8 | `BarcodeKind.of(_:)` classifies a scanned string: prefix `02` or `20`–`29` → `.internalCode`; 8, 12, or 13 digits otherwise → `.gtin`; anything else → `.unknown`. Used by 03 to warn the operator. |
+| R-01-8 | `BarcodeKind.of(_:)` classifies a scanned string. A string qualifies only if it is **all digits** and 8, 12, or 13 characters long; of those, prefix `02` or `20`–`29` → `.internalCode`, otherwise `.gtin`. Everything else → `.unknown`, including a digit-prefixed non-numeric string such as `"02ABC"`. Used by 03 to warn the operator. |
+| R-01-9 | Container creation attempts `cloudKitDatabase: .automatic` and, if that throws, falls back to a local-only configuration and continues. A full iCloud account, a signed-out device, or an unavailable container must **never** stop the shop trading (`CLOUDKIT_CHECKLIST.md` Part 3). The fallback is logged at `.error`; it is never silent, and it never recreates or deletes the store. |
 
 ## 5. Data model
 
-**This module owns no entities.** It owns the container that hosts them.
+**This module owns no entity behaviour.** It owns the container that hosts them, and the storage-only declarations that container needs.
 
 ```swift
 @MainActor
 enum PersistenceController {
+    static let schema = Schema([Product.self, StockMovement.self, Sale.self, SaleLine.self])
+
+    /// R-01-9: try CloudKit, fall back to local-only, never block trading.
     static func container(inMemory: Bool = false) throws -> ModelContainer {
-        let schema = Schema([Product.self, StockMovement.self, Sale.self, SaleLine.self])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
-        return try ModelContainer(for: schema, configurations: config)
+        if inMemory {
+            return try container(cloudKitDatabase: .none, inMemory: true)
+        }
+        do {
+            return try container(cloudKitDatabase: .automatic, inMemory: false)
+        } catch {
+            // Logged, never swallowed. The store is not recreated.
+            return try container(cloudKitDatabase: .none, inMemory: false)
+        }
     }
 }
 ```
+
+**This module owns no entities, but it does own the four `@Model` types' *declarations*** — `Product`, `StockMovement`, `Sale`, and `SaleLine` are created here as storage-only types so the `Schema` above, AC-01-6, and AC-01-8 can exist. They carry **no behaviour**: every rule, validation, and mutation belongs to 03 and 04, which own them. Fields are copied verbatim from 03 §5 and 04 §5.
 
 ## 6. States & transitions
 
@@ -84,6 +96,15 @@ extension BarcodeKind {
 
 protocol ScannerServicing {
     func scan() async throws -> String?    // nil == operator cancelled
+}
+
+enum JakartaDay {
+    static var timeZone: TimeZone { get }          // Asia/Jakarta, always
+    static func startOfDay(_ date: Date) -> Date
+    static func endOfDay(_ date: Date) -> Date     // exclusive upper bound
+    static func range(of date: Date) -> Range<Date>
+    static func key(_ date: Date) -> String        // "YYYYMMDD", for R-04-4
+    static func isSameDay(_ a: Date, _ b: Date) -> Bool
 }
 
 enum POSError: Error, Equatable { /* foundations §7 */ }
@@ -109,6 +130,8 @@ Replaces the template's API surface: this app has no HTTP layer.
 | `ScannerServicing` | `scan() async throws -> String?` | Present scanner, return one code | `scannerUnavailable` |
 | `Rp` | `format(_:) -> String` | Display a money amount | — |
 | `BarcodeKind` | `of(_:) -> BarcodeKind` | Classify a scanned string | — |
+| `JakartaDay` | `startOfDay(_:)` / `endOfDay(_:)` / `range(of:)` | The only day-boundary helper. Nothing else computes days. | — |
+| `JakartaDay` | `key(_:) -> String` | `"YYYYMMDD"` for sale numbering (R-04-4) | — |
 
 ## 10. UI notes
 
@@ -140,12 +163,22 @@ BarcodeKind.of("12345678")      → .gtin          (8 digits, EAN-8)
 BarcodeKind.of("ABC-123")       → .unknown
 ```
 
+Additional R-01-8 rulings, recorded so the digits-only clause is unambiguous. These are
+*not* part of AC-01-3's five, but each has a test:
+
+```
+BarcodeKind.of("02ABC")         → .unknown        (prefix matches, not all digits)
+BarcodeKind.of("20")            → .unknown        (prefix matches, wrong length)
+BarcodeKind.of("123456")        → .unknown        (6 digits — the accepted UPC-E gap)
+BarcodeKind.of("")              → .unknown
+```
+
 ## 12. Acceptance criteria
 
 | ID | Criterion |
 |---|---|
 | AC-01-1 | The app launches to the Jual tab on a fresh install without crashing. |
-| AC-01-2 | `Rp.format` returns exactly the five strings in §11. |
+| AC-01-2 | `Rp.format` returns exactly the four strings in §11. |
 | AC-01-3 | `BarcodeKind.of` returns exactly the five results in §11. |
 | AC-01-4 | With camera permission denied, `scan()` throws `scannerUnavailable` and the app does not crash. |
 | AC-01-5 | Cancelling the scanner returns `nil` and throws nothing. |
@@ -155,11 +188,11 @@ BarcodeKind.of("ABC-123")       → .unknown
 
 ## 13. Build checklist
 
-1. Xcode project, iOS 17 target, portrait only, `Info.plist` usage strings
-2. `Rp`, `BarcodeKind`, `POSError` + Indonesian messages
-3. `PersistenceController` and the empty `Schema`
-4. Repository protocols (empty bodies — 03 and 04 fill them)
+1. Xcode project, iOS 17 target, portrait only, `Info.plist` usage strings, iCloud capability (D-18)
+2. `Rp`, `BarcodeKind`, `JakartaDay`, `POSError` + Indonesian messages
+3. The four storage-only `@Model` types, `PersistenceController` and its `Schema`
+4. Repository protocols + their SwiftData conformances, limited to what the seed and 03 §7 already name
 5. `ScannerService` + `DataScannerViewController` wrapper
 6. Tab shell with three placeholder screens
 7. `SeedService` behind `#if DEBUG`
-8. Tests for R-01-2, R-01-8, and AC-01-6
+8. Tests for R-01-2, R-01-8, JakartaDay, AC-01-6, and AC-01-8

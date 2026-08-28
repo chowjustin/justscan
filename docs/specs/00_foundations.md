@@ -213,6 +213,12 @@ The dataset the app boots with in DEBUG. Real Indonesian products with real barc
 
 **Sales:** none. The golden path creates the first one.
 
+**Seed suppliers.** The seed runs before module 02 exists and never touches Contacts, so it pairs each
+supplier name with a **synthetic identifier** — `supplierContactID = "seed-toko-grosir-budi"`,
+`supplierName = "Toko Grosir Budi"` — keeping both D-11 columns populated. Consequence, stated so it is
+not discovered later: `ContactService.resolve(id:)` returns `nil` for a seed identifier, permanently.
+Seed data is DEBUG-only and never reaches a shop.
+
 A `SeedService.load()` runs only in DEBUG, only into an empty store, and is idempotent.
 
 ---
