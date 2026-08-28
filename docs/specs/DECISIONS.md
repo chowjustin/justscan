@@ -55,6 +55,9 @@ Interview closed with no open questions. Any `⚠️ OPEN` marker that appears i
 
 | Date | Reversal |
 |---|---|
+| 2026-08-28 | `03 §4`'s R-03-14, which said "every `StockService` method" throws `productNotFound` for a soft-deleted product. Its own reason is *"must not write to a dead row"*, and §8 keeps a deleted product's movements "for audit" — unreadable if the only reader refuses. Narrowed to the five methods that write; `movements(for:)` stays legible. |
+| 2026-08-28 | `03 §9`'s error table, which omitted `productNotFound` from `update`, `softDelete`, and every `StockServicing` row while §4's R-03-14 demanded it, and named no field for any `validationFailed`. The table now matches the rules and fixes the six field values. |
+| 2026-08-28 | `03 §10`'s two stock colours. The list badge said "red when ≤ 0" and R-03-7 said "negative in red", which taken literally paints `0` red on the list and not on the detail screen. Both now use `≤ 0`, matching D-05's "zero stock warns". |
 | 2026-08-28 | `02 §7`'s `authorizationStatus: CNAuthorizationStatus`. Naming a Contacts type in the export forces `import Contacts` on every caller *and every conformance* — the test fake included — which makes AC-02-7 unsatisfiable by construction, and defeats the reason the module exists. Replaced by `ContactAccess`, owned by `Core/Contacts/`. |
 | 2026-08-28 | `02 §3`'s "Found → open the contact card". Presenting `CNContactViewController` requires `descriptorForRequiredKeys()` — phone numbers, emails, postal addresses — which R-02-6 forbids and §1 lists as a non-goal. §10's Filled state defined no tap action either. Changing a supplier is detach-then-pick. |
 | 2026-08-28 | `STRUCTURE.md`'s `ContactPickerView.swift` as a `UIViewControllerRepresentable`, for the same reason `DataScannerView` was reversed in session 1: the export is `pick() async -> ContactRef?`. Replaced by `ContactPickerPresenter.swift`. |

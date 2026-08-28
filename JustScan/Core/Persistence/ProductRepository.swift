@@ -18,6 +18,14 @@ protocol ProductRepository {
     /// invisible here, which is what scopes uniqueness to live rows (R-03-1).
     func findBy(barcode: String) throws -> Product?
 
+    /// Non-deleted product with this identifier, or nil.
+    ///
+    /// A stale reference — a row that was never inserted, or one soft-deleted
+    /// since it was handed out — reads as absent here. That is what lets a
+    /// service fail loudly with `productNotFound` instead of writing to a dead
+    /// row (R-03-14).
+    func find(id: UUID) throws -> Product?
+
     /// All non-deleted products, name-ascending.
     func all() throws -> [Product]
 
@@ -45,6 +53,12 @@ struct SwiftDataProductRepository: ProductRepository {
         // Filtered in memory rather than by predicate: foundations §8 sizes the
         // catalogue at 200–2,000 products and explicitly sanctions this.
         try all().first { $0.barcode == barcode }
+    }
+
+    func find(id: UUID) throws -> Product? {
+        // Same in-memory filter as `findBy(barcode:)`, and sanctioned by the
+        // same sizing note in foundations §8.
+        try all().first { $0.id == id }
     }
 
     func all() throws -> [Product] {

@@ -53,6 +53,25 @@ enum JakartaDay {
         )
     }
 
+    /// `d MMM, HH:mm` in Jakarta — the stamp on every ledger and history row
+    /// (03 §10). Display only; nothing decides anything from this string.
+    ///
+    /// It lives here rather than in a feature because the alternative is each
+    /// screen building its own formatter, and a formatter that forgets to set
+    /// `timeZone` is exactly the bug this type exists to prevent.
+    static func shortDateTime(_ date: Date) -> String {
+        shortDateTimeFormatter.string(from: date)
+    }
+
+    private static let shortDateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "id_ID")
+        formatter.timeZone = timeZone
+        formatter.calendar = calendar
+        formatter.dateFormat = "d MMM, HH:mm"
+        return formatter
+    }()
+
     /// Whether two instants fall on the same Jakarta day.
     static func isSameDay(_ a: Date, _ b: Date) -> Bool {
         startOfDay(a) == startOfDay(b)

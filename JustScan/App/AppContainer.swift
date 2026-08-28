@@ -28,6 +28,11 @@ final class AppContainer {
     let products: ProductRepository
     let stockMovements: StockMovementRepository
 
+    /// Module 03. `stock` lives in `Core/` because module 04 records a movement
+    /// on every sale and every void — it is the only path to `stockQty`.
+    let catalogue: CatalogueServicing
+    let stock: StockServicing
+
     init(
         modelContainer: ModelContainer,
         scanner: ScannerServicing,
@@ -39,8 +44,13 @@ final class AppContainer {
 
         let context = ModelContext(modelContainer)
         self.context = context
-        self.products = SwiftDataProductRepository(context: context)
-        self.stockMovements = SwiftDataStockMovementRepository(context: context)
+        let products = SwiftDataProductRepository(context: context)
+        let stockMovements = SwiftDataStockMovementRepository(context: context)
+        self.products = products
+        self.stockMovements = stockMovements
+
+        self.catalogue = CatalogueService(products: products)
+        self.stock = StockService(products: products, movements: stockMovements)
     }
 
     #if DEBUG

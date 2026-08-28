@@ -4,9 +4,9 @@ Read this file **first** at the start of every session. Update it at the end of 
 
 ## Current
 
-- **Active module:** 02 Contact link — **done, 8/8**
-- **Session goal:** 02 Contact Link ✅
-- **Next up:** 03 Catalogue
+- **Active module:** 03 Catalogue — **done, 16/16**
+- **Session goal:** 03 Catalogue ✅
+- **Next up:** 04 Sale
 
 ## Status
 
@@ -14,11 +14,11 @@ Read this file **first** at the start of every session. Update it at the end of 
 |---|---|---|---|
 | 01 App shell | **done** | **8/8** | 52 tests, 125 expectations, all passing. CloudKit mirroring verified live. |
 | 02 Contact link | **done** | **8/8** | 31 new tests, 83 passing overall. Ships no screens — one shared `ContactField` that 03 and 04 embed. |
-| 03 Catalogue | todo | 0/16 | Largest data model |
+| 03 Catalogue | **done** | **16/16** | 57 new tests, 140 passing overall. `StockService` is the only writer of `stockQty`. |
 | 04 Sale | todo | 0/18 | Largest module. Build nothing else that session. |
 | 05 History | todo | 0/9 | Read-only |
 
-**Total: 16/59 acceptance criteria.**
+**Total: 32/59 acceptance criteria.**
 
 ## Session order and sizing
 
@@ -52,6 +52,19 @@ Budget the remaining days for polish, the three ADRs, and the golden path run �
 | 02 | 02 added paired `supplier` / `customer` accessors to `Product` and `Sale` | `STRUCTURE.md` already specified both, and they are where R-02-5 stops being a rule someone remembers and starts being unrepresentable state. Trivial computed properties, which `CONVENTIONS.md` permits on a model; 03 and 04 still own every rule about those entities. | No — `STRUCTURE.md` already said so |
 | 02 | `ContactFieldViewModel.swift` is a sixth file in `Core/Contacts/` | A View may not call a Service, and the three states of §10 are a decision, not a rendering. `STRUCTURE.md` listed four files and no ViewModel. | Yes — `STRUCTURE.md` updated |
 
+| 03 | R-03-14 narrowed to the five methods that **write** | It said "every `StockService` method", but its own stated reason is *"must not write to a dead row"*, and §8 promises a deleted product's movements survive "for audit" — which is unreadable if the only reader throws. `movements(for:)` is now exempt; the five writers are not. | Yes — R-03-14 rewritten, reversal logged in `DECISIONS.md` |
+| 03 | §9's error table was incomplete against §4 | It omitted `productNotFound` from `update`, `softDelete`, and every `StockServicing` row while R-03-14 demanded it, and named no `field` for any `validationFailed`. Two sections disagreed about what a method throws. | Yes — §9 now carries the missing errors plus a six-row field table |
+| 03 | `record` rejects `delta == 0`; `adjust` rejects a negative count and a blank note | §9 lists `validationFailed` for both methods and §4 never names a trigger, so the errors were unreachable as specced. §5 says delta is "never zero in practice" and R-03-13 forbids a movement of zero — that is the trigger. | Yes — §9's field table records all six |
+| 03 | `ProductRepository.find(id:)` added | R-03-14's "missing" half had no detection mechanism: soft delete means rows are never removed, so `deletedAt` catches deleted rows and nothing catches a `Product` that was never inserted. Internal to the module — not a §7 export. | Yes — `STRUCTURE.md` updated |
+| 03 | The detail screen's stock is red at `≤ 0`, not `< 0` | §10's list badge said "≤ 0" and R-03-7 said "negative"; following both literally paints `0` red on one screen and not the other. D-05's "zero stock warns" settles it. | Yes — 03 §10 rewritten, reversal logged |
+| 03 | An empty-string barcode is stored as `nil` | Spec silent. `""` is neither a code nor absence, and left as a value it would collide with itself on the second barcode-less product — the exact case R-03-3 exists to allow. | Yes — 03 §5 records it |
+| 03 | A blank `search()` query returns `all()` | Spec silent. Clearing the search field must show the catalogue, not an empty screen. | Yes — 03 §10 records it |
+| 03 | `JakartaDay.shortDateTime(_:)` added — a module 01 file | §10 requires `d MMM, HH:mm` in Asia/Jakarta and no formatter existed. The alternative is each feature building its own, and a formatter that forgets `timeZone` is the exact bug `JakartaDay` exists to prevent. 05 needs the same string. | Yes — `STRUCTURE.md` updated |
+| 03 | `StockReason` gained `requiresSaleID` and a Indonesian `label` | The first is R-03-13 turned from a sentence into something `record` can enforce. The second is five operator-facing strings no spec provided; they live in `StockMovementRow.swift`, next to the only thing that renders them. | Yes — 03 §10 records the five labels |
+| 03 | `SeedService` still sets `stockQty` through `Product.init` | AC-03-14 says `stockQty` is assigned only inside `StockService`. The DEBUG seed sets it via the initialiser and writes the matching `.opening` movement in the same `save()`, so the cache is never wrong. Rewriting a module 01 file to route four DEBUG rows through `record` would turn one `save()` into four for no gain. The grep gate targets mutation (`stockQty =`), which the initialiser is not. | No — recorded as a written exemption below |
+| 03 | `ContactField` on the product detail screen persists immediately | §10 puts the supplier "via `ContactField`" on a screen with no Save button. The field is an editor by construction — it has a picker and a detach control — so a change there writes through `CatalogueServicing.update`. The alternative was a decorative row that silently discards what the operator did. | Yes — 03 §10 rewritten |
+| 03 | `CatalogueViewModelTests.swift` added | AC-03-1, AC-03-2, and AC-03-7 are ViewModel decisions, and `STRUCTURE.md` listed no ViewModel test file for 03. Views themselves are still never tested. | Yes — `STRUCTURE.md` updated |
+
 Record every deviation here the moment it happens. An undocumented deviation is how a codebase stops matching its spec.
 
 ## Open questions raised during build
@@ -60,7 +73,10 @@ Record every deviation here the moment it happens. An undocumented deviation is 
 - [ ] **For module 05 — golden path §10 step 10 is unbuildable as written.** It says Chitato's history shows `+2 void · -2 sale · +24 restock · **+0 opening**`. But step 1 starts from an empty catalogue with no seed, step 2 creates Chitato with "no movement written", and foundations §9 / R-03-13 state that zero stock is the *absence* of movements, never a movement of zero. That `+0 opening` row cannot exist. `GoldenPathTests` will fail on it. Decide before session 5 whether to drop the row from the golden path or change the rule.
 - [x] **Resolved in session 2 — `resolve(id:)` tolerates a seed identifier.** `ContactService.resolve` maps every read failure, `recordDoesNotExist` included, to `nil`; only a refused permission throws (R-02-4). Pinned by `test_R0204_seedIdentifierResolvesToNil`.
 - [x] **Resolved in session 2** — the seven questions raised at the 02 plan gate (gone-state trigger, contact card, `.notDetermined`, host accessors, fake location, presenter naming, AC-02-8 provability). Answers are in the Deviations table above.
-- [ ] **For module 03 — `ContactField` is embedded, never constructed by a View.** The host ViewModel owns the `ContactFieldViewModel` and reads `.ref` at save time. `ProductFormViewModel` must hold one, or the supplier will not reach `Product.supplier`.
+- [x] **Resolved in session 3 — `ContactField` is embedded, never constructed by a View.** `ProductFormViewModel` and `ProductDetailViewModel` each own a `ContactFieldViewModel` and read `.ref` at save time. Pinned by `test_formAttachesTheSupplierToTheProduct` and `test_detailPersistsASupplierChange`.
+- [x] **Resolved at the session 3 plan gate** — the sixteen questions raised there (R-03-14's scope and its "missing" half, §9's missing errors and unnamed `validationFailed` fields, the seed's `stockQty` path, the §11 "Lihat" target, the five reason labels, the Jakarta formatter, `updatedAt` on stock changes, blank barcodes and blank searches, the two stock colours, `Sale`/`SaleLine` in a 03 test, and the three new test files). Answers are in the Deviations table above.
+- [ ] **For module 04 — `StockService.record` rejects `delta == 0`.** 04 must never call it with a zero-quantity line. `SaleService.complete` should skip a line whose qty is zero rather than let `validationFailed(field: "qty")` abort a tender that is otherwise valid.
+- [ ] **For module 04 — a `.sale` or `.void` movement without a `saleID` now throws.** R-03-13 is enforced at the boundary (`validationFailed(field: "reason")`), so 04 must pass the sale's `id` on every stock call it makes.
 
 ## Written test exemptions
 
@@ -76,6 +92,11 @@ Per `CONVENTIONS.md` §Testing, every rule gets a test or a written note saying 
 | AC-02-7 (no `import Contacts` outside `Core/Contacts/`) | Not a runtime behaviour. | `grep -rn "^import Contacts"` across both targets, run and recorded in the §12 table. Made structurally true by `ContactAccess`. |
 | AC-02-1 / AC-02-2, real picker | `CNContactPickerViewController` runs out-of-process and needs a human tap. | `ContactServiceContractTests` pins the contract via `FakeContactService`; the device path was exercised manually. |
 | R-02-6 (only three keys requested) | The rule is enforced by *not asking* — there is nothing to assert against, exactly as with R-01-6. | Enforced structurally in `ContactService.keysToFetch`, one constant with one call site; verified by reading it. |
+| AC-03-14 (`stockQty` assigned only in `StockService`) | Not a runtime behaviour. | `grep -rn "stockQty[ ]*[-+]\{0,1\}=" JustScan` — two hits, both in `StockService.swift` (`:63`, `:108`). The third is `Product.init`'s own `self.stockQty = stockQty`, which is the declaration, not a mutation. `SeedService` reaches it only through that initialiser and writes the matching `.opening` movement in the same `save()`. |
+| AC-03-15 (no `@Attribute(.unique)`) | Not a runtime behaviour. | `grep -rn "@Attribute(.unique)\|@Query" JustScan JustScanTests` — every hit is a comment saying the app does not use them. |
+| AC-03-1 / AC-03-2 / AC-03-7, real camera | The device path needs a `DataScannerViewController` and a human holding a packet of crisps. | `CatalogueViewModelTests` drives the identical decision through `FakeScannerService`; the ViewModel cannot tell the difference. |
+| R-03-9 (a movement cannot be constructed without a reason) | Structural. `StockServicing.record` has no default for `reason`, so the compiler enforces it. | Verified by reading the one signature; every `record` call site names a reason. |
+| R-03-10 (movements are never edited or deleted) | Structural. `StockMovementRepository` exposes `insert` and `movements` and nothing else. | `test_R0310_correctionIsAnOffsettingMovement` pins the *behaviour* — a wrong movement is corrected by an offset and the original survives. |
 
 ## Conventions added this build
 
@@ -105,4 +126,4 @@ The final gate before the project is called complete. Run the ten numbered steps
 
 | Run | Date | Result | Failures |
 |---|---|---|---|
-| — | — | not yet run | blocked until 05 — steps 2–10 need modules 03 and 04. See the step-10 open question above. |
+| — | — | not yet run | blocked until 05 — steps 5–10 need module 04. Steps 1–4 are now buildable and are covered piecewise by `CatalogueServiceTests` and `StockServiceTests`. See the step-10 open question above. |

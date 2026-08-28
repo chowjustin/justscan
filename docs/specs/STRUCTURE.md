@@ -91,6 +91,8 @@ Core/
 │   └── Rp.swift                       format(_:) → "Rp 12.000"
 ├── Time/
 │   └── JakartaDay.swift               THE day-boundary helper. Nothing else computes days.
+│                                      Also owns `shortDateTime(_:)`, the one `d MMM, HH:mm`
+│                                      formatter — added session 3 so 03 and 05 share it.
 ├── Barcode/
 │   ├── BarcodeKind.swift              .gtin / .internalCode / .unknown
 │   ├── ScannerService.swift           protocol + concrete
@@ -103,11 +105,12 @@ Core/
 │   ├── ContactFieldViewModel.swift    decides the three states of 02 §10
 │   └── ContactField.swift             the shared 3-state row (03 and 04 both embed it)
 ├── Stock/                             ← owned by 03, lives in Core because 04 calls it
-│   ├── StockReason.swift
+│   ├── StockReason.swift              + `requiresSaleID`, which is R-03-13 made enforceable
 │   └── StockService.swift             protocol + concrete
 ├── Persistence/
 │   ├── PersistenceController.swift    the Schema and ModelContainer
-│   ├── ProductRepository.swift        protocol + SwiftDataProductRepository
+│   ├── ProductRepository.swift        protocol + SwiftDataProductRepository. `find(id:)`
+│   │                                  added session 3: it is how R-03-14 detects "missing".
 │   ├── StockMovementRepository.swift
 │   └── SaleRepository.swift           incl. number allocation (R-04-4)
 ├── Errors/
@@ -126,7 +129,7 @@ Features/
 ├── Catalogue/                         ← module 03
 │   ├── CatalogueService.swift         protocol + concrete
 │   ├── ProductListView.swift
-│   ├── ProductListViewModel.swift
+│   ├── ProductListViewModel.swift     + the nested `Route` the stack navigates on
 │   ├── ProductDetailView.swift
 │   ├── ProductDetailViewModel.swift
 │   ├── ProductFormView.swift          new + edit, one view
@@ -163,7 +166,9 @@ JustScanTests/
 │   ├── TestContainer.swift             isStoredInMemoryOnly: true
 │   ├── Fixtures.swift                  chitato(), tehBotol(), gorengan()
 │   ├── FakeContactService.swift
-│   └── InMemoryProductRepository.swift
+│   ├── FakeScannerService.swift
+│   ├── InMemoryProductRepository.swift      a `save()` that can be made to fail
+│   └── InMemoryStockMovementRepository.swift
 ├── Core/
 │   ├── RpTests.swift                   R-01-2 — the five exact strings
 │   ├── BarcodeKindTests.swift          R-01-8 — the five exact classifications
@@ -173,8 +178,9 @@ JustScanTests/
 │   ├── ContactFieldViewModelTests.swift   the three states of 02 §10
 │   └── ContactHostMappingTests.swift   R-02-1 / R-02-5 through a real store, AC-02-8
 ├── Catalogue/
-│   ├── CatalogueServiceTests.swift     R-03-1..5, R-03-12, R-03-14
-│   └── StockServiceTests.swift         R-03-6..11, R-03-13 — the ledger arithmetic
+│   ├── CatalogueServiceTests.swift     R-03-1..5, R-03-12, R-03-14, AC-03-13
+│   ├── StockServiceTests.swift         R-03-6..11, R-03-13 — the ledger arithmetic
+│   └── CatalogueViewModelTests.swift   AC-03-1/2/7 — the scan pivot and the R-03-8 warning
 ├── Sale/
 │   ├── SaleServiceTests.swift          R-04-3, R-04-5..8, R-04-15 (write this one first)
 │   ├── SaleNumberingTests.swift        R-04-4 across a Jakarta day boundary

@@ -35,4 +35,26 @@ enum TestContainer {
             SwiftDataStockMovementRepository(context: context)
         )
     }
+
+    /// The two module 03 services over one shared context, wired exactly as
+    /// `AppContainer` wires them — so a test exercises the real save path
+    /// rather than an arrangement that only exists in tests.
+    static func catalogue() throws -> (
+        container: ModelContainer,
+        context: ModelContext,
+        products: ProductRepository,
+        movements: StockMovementRepository,
+        catalogue: CatalogueServicing,
+        stock: StockServicing
+    ) {
+        let wiring = try repositories()
+        return (
+            wiring.container,
+            wiring.context,
+            wiring.products,
+            wiring.movements,
+            CatalogueService(products: wiring.products),
+            StockService(products: wiring.products, movements: wiring.movements)
+        )
+    }
 }

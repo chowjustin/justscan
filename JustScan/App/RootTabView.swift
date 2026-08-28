@@ -5,9 +5,8 @@
 //  Three tabs, Jual selected on launch — the cashier screen is the app's home,
 //  not the catalogue (01 §3).
 //
-//  The tab bodies are placeholders. Modules 03, 04, and 05 replace them with
-//  their own screens; those screens live in Features/, created by the session
-//  that owns them.
+//  Produk is module 03's `ProductListView`. Jual and Riwayat are still
+//  placeholders; modules 04 and 05 replace them with their own screens.
 //
 
 import SwiftUI
@@ -15,6 +14,10 @@ import SwiftUI
 struct RootTabView: View {
     /// Jual is the launch tab (01 §3, §10).
     @State private var selection: Tab = .jual
+
+    /// Passed down rather than read again inside each screen: a screen builds
+    /// its ViewModel in `init`, where the environment is not yet available.
+    @Environment(AppContainer.self) private var container
 
     private enum Tab: Hashable {
         case jual, produk, riwayat
@@ -30,13 +33,9 @@ struct RootTabView: View {
             .tabItem { Label("Jual", systemImage: "cart") }
             .tag(Tab.jual)
 
-            PlaceholderScreen(
-                title: "Produk",
-                systemImage: "shippingbox",
-                message: "Katalog produk dibuat di modul 03."
-            )
-            .tabItem { Label("Produk", systemImage: "shippingbox") }
-            .tag(Tab.produk)
+            ProductListView(container: container)
+                .tabItem { Label("Produk", systemImage: "shippingbox") }
+                .tag(Tab.produk)
 
             PlaceholderScreen(
                 title: "Riwayat",
@@ -69,6 +68,4 @@ private struct PlaceholderScreen: View {
     }
 }
 
-#Preview {
-    RootTabView()
-}
+

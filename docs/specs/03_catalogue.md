@@ -75,7 +75,7 @@ Single operator. Everything in this module is available to them.
 | R-03-10 | Movements are **immutable and never deleted**. A wrong movement is corrected by an offsetting `.adjustment`, never by editing or removing the original. |
 | R-03-11 | Inserting a movement and updating `stockQty` happen in one `save()`. A movement without its cache update, or a cache update without its movement, is a data-integrity bug. |
 | R-03-12 | Deletion is soft. `deletedAt != nil` excludes a product from every list and every lookup, including scan. It never removes it from a past sale. |
-| R-03-14 | Any service call reaching a product that is missing or soft-deleted throws `productNotFound`. Applies to `update`, `softDelete`, and every `StockService` method — a stale reference must fail loudly, not write to a dead row. |
+| R-03-14 | Any service call that **writes** to a product that is missing or soft-deleted throws `productNotFound`. Applies to `update`, `softDelete`, `record`, `adjust`, and `recompute` — a stale reference must fail loudly, not write to a dead row. "Missing" means `ProductRepository.find(id:)` does not return it. `movements(for:)` is exempt: it writes nothing, and §8 keeps a deleted product's movements "for audit", which is unreadable if the only reader refuses. |
 | R-03-13 | `StockReason` is exactly: `opening`, `restock`, `sale`, `void`, `adjustment`. `sale` and `void` carry a non-nil `saleID`; the other three carry nil. |
 
 ## 5. Data model
@@ -88,7 +88,7 @@ Single operator. Everything in this module is available to them.
 | `name` | `String` | ✗ | `""` | 1–80 chars, trimmed, not unique |
 | `priceRp` | `Int` | ✗ | `0` | rupiah, > 0 |
 | `stockQty` | `Int` | ✗ | `0` | **cached**, = Σ movement deltas |
-| `barcode` | `String?` | ✓ | `nil` | unique among non-deleted, repo-enforced |
+| `barcode` | `String?` | ✓ | `nil` | unique among non-deleted, repo-enforced. Trimmed on the way in; an empty or whitespace-only string is stored as `nil`, because a code is either present or absent and `""` is neither (R-03-3) |
 | `supplierContactID` | `String?` | ✓ | `nil` | `CNContact.identifier` (02) |
 | `supplierName` | `String?` | ✓ | `nil` | snapshot, paired with the above |
 | `createdAt` | `Date` | ✗ | `Date()` | |
@@ -175,21 +175,45 @@ ContactService.pick()      // 02 — attach a supplier
 | Type | Method | Purpose | Errors |
 |---|---|---|---|
 | `CatalogueServicing` | `create` | New product | `validationFailed`, `barcodeAlreadyExists`, `persistenceFailed` |
-| `CatalogueServicing` | `update` | Edit name/price/supplier | `validationFailed`, `persistenceFailed` |
-| `CatalogueServicing` | `softDelete` | Hide from catalogue | `persistenceFailed` |
+| `CatalogueServicing` | `update` | Edit name/price/supplier | `validationFailed`, `productNotFound`, `persistenceFailed` |
+| `CatalogueServicing` | `softDelete` | Hide from catalogue | `productNotFound`, `persistenceFailed` |
 | `CatalogueServicing` | `findBy(barcode:)` | Scan lookup | `persistenceFailed` |
-| `StockServicing` | `record` | Append a movement + update cache | `validationFailed`, `persistenceFailed` |
-| `StockServicing` | `adjust` | Set to a counted quantity | `validationFailed`, `persistenceFailed` |
-| `StockServicing` | `recompute` | Rebuild cache from ledger | `persistenceFailed` |
+| `CatalogueServicing` | `all` / `search` | List and filter | `persistenceFailed` |
+| `StockServicing` | `record` | Append a movement + update cache | `validationFailed`, `productNotFound`, `persistenceFailed` |
+| `StockServicing` | `adjust` | Set to a counted quantity | `validationFailed`, `productNotFound`, `persistenceFailed` |
+| `StockServicing` | `recompute` | Rebuild cache from ledger | `productNotFound`, `persistenceFailed` |
+| `StockServicing` | `movements(for:)` | Read the ledger | `persistenceFailed` |
+
+**Which `validationFailed` field.** §4 names the rules but not the field each
+carries, so they are fixed here:
+
+| Method | Condition | Field |
+|---|---|---|
+| `create` / `update` | name blank or over 80 chars (R-03-4) | `"name"` |
+| `create` / `update` | `priceRp <= 0` (R-03-5) | `"price"` |
+| `record` | `delta == 0` — §5 says never zero, and R-03-13 forbids a movement of zero | `"qty"` |
+| `record` | `reason.requiresSaleID != (saleID != nil)` (R-03-13) | `"reason"` |
+| `adjust` | `countedQty < 0` — nobody counts a negative number off a shelf | `"qty"` |
+| `adjust` | `note` blank — a reasonless correction is unreadable a month later | `"reason"` |
+
+Negative stock stays reachable through `record`, which is where a sale of goods
+the ledger did not know about lands (R-03-7).
 
 ## 10. UI notes
 
 **Produk (list)** — `Product` list, name-ascending, excludes deleted.
 Row: name · `Rp.format(priceRp)` · `stockQty` badge, red when ≤ 0.
-Top-right: a large **Scan** button. Search field filters by name.
+Top-right: a large **Scan** button. Search field filters by name; a blank
+query is not a filter but the unfiltered list, which is what clearing the
+field must show.
 Empty state: *"Belum ada produk. Scan barcode untuk mulai."* with the scan button repeated.
 
-**Product detail** — name, price, supplier via `ContactField`, current stock in large type.
+**Product detail** — name, price, supplier via `ContactField`, current stock in large type,
+red at or below zero to match the list badge. R-03-7 says *negative* is red and §10's badge
+says *≤ 0*; taken literally that makes `0` red on one screen and not the other, so both use
+`≤ 0` — which is also what D-05's "zero stock warns" asks for.
+The `ContactField` here is an editor, not a label: picking or detaching a supplier writes
+through `CatalogueServicing.update` immediately.
 Primary action **Tambah Stok**. Secondary **Koreksi Stok**.
 Below: movement history, newest first, each row `±delta · reason · date`, sign-coloured.
 Menu: Edit · Hitung Ulang dari Riwayat · Hapus.
@@ -197,7 +221,17 @@ Menu: Edit · Hitung Ulang dari Riwayat · Hapus.
 **New / edit product form** — barcode (shown, locked, or "Tanpa barcode"), name, price (number pad, `id_ID` formatted live), supplier `ContactField`.
 The R-03-8 warning appears as a yellow inline banner above the fields, never as a blocking alert.
 
-Formatting: money always via `Rp.format`. Dates as `d MMM, HH:mm` in `Asia/Jakarta`.
+Formatting: money always via `Rp.format`. Dates as `d MMM, HH:mm` in `Asia/Jakarta`,
+through `JakartaDay.shortDateTime(_:)` — one shared formatter, because a formatter that
+forgets to set `timeZone` is the bug that helper exists to prevent.
+
+Movement reasons render in Indonesian: `opening` "Stok awal", `restock` "Tambah stok",
+`sale` "Penjualan", `void` "Pembatalan", `adjustment` "Koreksi". The raw values stay
+English (R-03-13); only the labels are translated.
+
+Recompute reports its result in an alert: matching → *"Stok cocok: 24."*, differing →
+*"Stok tercatat 24, hasil hitung ulang 21. Angka sudah diperbaiki."* A difference is a cache
+bug and is stated plainly, never smoothed over (§3).
 
 ## 11. Worked examples
 
@@ -226,6 +260,8 @@ BARCODE COLLISION
   create(name: "Chitato Rasa Keju 68g",     barcode: "8992775311011")
     → throws barcodeAlreadyExists(productID: <the Sapi Panggang product>)
     → UI: "Barcode ini sudah dipakai Chitato Sapi Panggang 68g." + Lihat
+    → the name comes from the §7 all() export, not a new lookup method;
+      "Lihat" replaces the form on the stack with that product's detail.
 
 BARCODE-LESS PRODUCT
   create(name: "Gorengan", priceRp: 2000, barcode: nil)  → OK
