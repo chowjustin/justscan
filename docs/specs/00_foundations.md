@@ -264,7 +264,10 @@ The end-to-end smoke test. If this runs clean, the system works. Numbers are exa
     listed, struck through.
 
 10. Chitato detail → movement history shows, newest first:
-    +2 void · -2 sale · +24 restock · +0 opening.
+    +2 void · -2 sale · +24 restock.  ← three rows, not four
+    There is no opening movement. Step 2 creates Chitato at stockQty 0 with
+    "no movement written", and zero stock is the *absence* of movements,
+    never a movement of zero (§9, R-03-9, R-03-13). Corrected session 5.
     Tap "Recompute from movements" → stockQty recomputes to 24. Unchanged.
 ```
 

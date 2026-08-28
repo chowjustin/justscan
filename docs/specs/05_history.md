@@ -121,7 +121,17 @@ None exported. Consumes module 04's surface only.
 
 **Sale detail** — number and full timestamp at the top; lines as `name · qty × unitPrice · lineTotal`; total; payment method; cash received and change for cash sales only; customer if present. Voided sales get a destructive-tinted banner with reason and time, and no void button.
 
-Formatting: money through `Rp.format`. Times as `HH:mm`, dates as `d MMM yyyy`, both `Asia/Jakarta`, `id_ID`.
+Formatting: money through `Rp.format`. Times as `HH:mm`, dates as `d MMM yyyy`, both `Asia/Jakarta`, `id_ID`. All three formatters live on `JakartaDay` — `time(_:)`, `longDate(_:)`, `fullDateTime(_:)` — because a formatter that forgets its `timeZone` is the exact bug that type exists to prevent.
+
+**Three things §10 left open, fixed at the session-5 plan gate.**
+
+| Question | Decision |
+|---|---|
+| Does the summary card appear under `Semua`? | **No.** The card is a *day* summary. An all-time total can only see the loaded window, and a true one needs an unbounded fetch that foundations §8 forbids. Each section header carries the subtotal §3.4 actually asks for. |
+| A 100-row page usually ends mid-day — what does that day's subtotal say? | **Nothing.** The oldest, half-loaded group withholds its subtotal until the day is complete. A partial figure presented as a day total is a lie the next scroll quietly corrects. |
+| What order do a sale's lines render in? | **`nameSnapshot` ascending, then `id`.** Foundations §6 bans ordered relationships and `SaleLine` carries no ordinal, so without an explicit sort the order is whatever the fetch produced. |
+
+Empty-list strings, one per scope: `Hari Ini` → "Belum ada transaksi hari ini" (§10), `Kemarin` → "Belum ada transaksi kemarin", `Semua` → "Belum ada transaksi".
 
 ## 11. Worked examples
 

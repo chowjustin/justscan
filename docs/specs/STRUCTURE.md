@@ -91,8 +91,12 @@ Core/
 │   └── Rp.swift                       format(_:) → "Rp 12.000"
 ├── Time/
 │   └── JakartaDay.swift               THE day-boundary helper. Nothing else computes days.
-│                                      Also owns `shortDateTime(_:)`, the one `d MMM, HH:mm`
-│                                      formatter — added session 3 so 03 and 05 share it.
+│                                      Also owns every display formatter, because one that
+│                                      forgets `timeZone` is the bug this type exists to
+│                                      prevent: `shortDateTime(_:)` (session 3, `d MMM, HH:mm`)
+│                                      and `time(_:)` / `longDate(_:)` / `fullDateTime(_:)`
+│                                      plus `previousDay(_:)` — 05 §10's `HH:mm`,
+│                                      `d MMM yyyy`, and "kemarin" (session 5).
 ├── Barcode/
 │   ├── BarcodeKind.swift              .gtin / .internalCode / .unknown
 │   ├── ScannerService.swift           protocol + concrete
@@ -154,12 +158,16 @@ Features/
 │   ├── CashQuickPicks.swift           R-04-9. Pure function, easy to test.
 │   ├── PaymentSuccessView.swift       change due, auto-dismiss 3 s
 │   └── VoidSheet.swift                required reason
-└── History/                           ← module 05
-    ├── DaySummary.swift               + the aggregation function
-    ├── HistoryView.swift
-    ├── HistoryViewModel.swift
-    ├── SaleDetailView.swift
-    └── SaleRow.swift
+└── History/                           ← module 05. Reads only: no service, no
+    │                                     repository, no `ModelContext` (R-05-8).
+    ├── DaySummary.swift               + the aggregation function and `DaySummary.Group`
+    ├── HistoryView.swift              + the private summary card and day header
+    ├── HistoryViewModel.swift         scope, paging, and which subtotals are honest
+    ├── SaleDetailView.swift           presents module 04's `VoidSheet`, owns none of it
+    ├── SaleDetailViewModel.swift      added session 5 — a View may not call a Service,
+    │                                  and **Batalkan** is a service call
+    └── SaleRow.swift                  + `PaymentMethod.label` / `.icon`, the two
+                                       operator-facing strings 05 §10 needs
 ```
 
 ---
@@ -198,8 +206,14 @@ JustScanTests/
 │   ├── CartViewModelTests.swift        R-04-2, R-04-16, AC-04-1/2/18
 │   └── TenderViewModelTests.swift      added session 4 — the sheet's own decisions
 ├── History/
-│   └── DaySummaryTests.swift           R-05-1..7, incl. the §11 worked example
-└── GoldenPathTests.swift               all ten steps, one test, fresh container
+│   ├── DaySummaryTests.swift           R-05-1..7, incl. the §11 worked example
+│   ├── HistoryViewModelTests.swift     added session 5 — scopes, paging, AC-05-7
+│   └── SaleDetailViewModelTests.swift  added session 5 — R-05-4, AC-05-6, the void entry
+└── GoldenPathTests.swift               all ten steps, one test, fresh container.
+                                        NOT a module-05 file: 05 §12 defines no criterion
+                                        for it and 05 §13 does not list it. It belongs to
+                                        the `/golden-path` gate, which runs after 05.
+                                        Reassigned session 5.
 ```
 
 Test naming: `test_R0403_snapshotsPriceAtTender`. The rule ID in the name is what lets `/verify-module` map tests to rules mechanically instead of by reading them.
@@ -232,6 +246,6 @@ Real enforcement would mean local SPM packages, one per module, with explicit de
 | 2 | 02 Contact link | `Core/Contacts/` |
 | 3 | 03 Catalogue | `Models/Product`, `Models/StockMovement`, `Core/Stock/`, the two repositories, `Features/Catalogue/`, `JustScanTests/Catalogue/` |
 | 4 | 04 Sale | `SaleRepository` (filled), `Features/Sale/`, `JustScanTests/Sale/`. `Models/Sale` and `Models/SaleLine` were already declared in session 1 and needed no field changes. |
-| 5 | 05 History | `Features/History/`, `JustScanTests/History/`, `GoldenPathTests` |
+| 5 | 05 History | `Features/History/`, `JustScanTests/History/`. `GoldenPathTests` belongs to the `/golden-path` gate, not to this session — see the test tree above. |
 
 Roughly 60 Swift files. If a session is producing appreciably more than its row above, it has taken on work that belongs to a later module — stop and check the spec's non-goals.

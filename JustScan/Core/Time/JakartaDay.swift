@@ -37,6 +37,16 @@ enum JakartaDay {
             ?? startOfDay(date).addingTimeInterval(24 * 60 * 60)
     }
 
+    /// Midnight in Jakarta on the *previous* day — "kemarin" (05 §10).
+    ///
+    /// It lives here rather than in `HistoryViewModel` for the same reason
+    /// everything else in this type does: one helper owns day boundaries, and
+    /// no feature computes its own (CONVENTIONS.md).
+    static func previousDay(_ date: Date) -> Date {
+        calendar.date(byAdding: .day, value: -1, to: startOfDay(date))
+            ?? startOfDay(date).addingTimeInterval(-24 * 60 * 60)
+    }
+
     /// Half-open range covering one Jakarta day: `[start, end)`.
     static func range(of date: Date) -> Range<Date> {
         startOfDay(date)..<endOfDay(date)
@@ -63,14 +73,40 @@ enum JakartaDay {
         shortDateTimeFormatter.string(from: date)
     }
 
-    private static let shortDateTimeFormatter: DateFormatter = {
+    private static let shortDateTimeFormatter = formatter(format: "d MMM, HH:mm")
+
+    /// `HH:mm` in Jakarta — the time on a history row (05 §10).
+    static func time(_ date: Date) -> String {
+        timeFormatter.string(from: date)
+    }
+
+    /// `d MMM yyyy` in Jakarta — a day header and the date half of a full
+    /// stamp (05 §10).
+    static func longDate(_ date: Date) -> String {
+        longDateFormatter.string(from: date)
+    }
+
+    /// `d MMM yyyy, HH:mm` — the full timestamp at the top of a sale detail
+    /// (05 §10). Composed from the two above so there is one definition of each
+    /// half, not three formatters that can drift apart.
+    static func fullDateTime(_ date: Date) -> String {
+        "\(longDate(date)), \(time(date))"
+    }
+
+    private static let timeFormatter = formatter(format: "HH:mm")
+    private static let longDateFormatter = formatter(format: "d MMM yyyy")
+
+    /// Every formatter in this file is built here, so none of them can be
+    /// declared without its `timeZone` — the exact bug this type exists to
+    /// prevent.
+    private static func formatter(format: String) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "id_ID")
         formatter.timeZone = timeZone
         formatter.calendar = calendar
-        formatter.dateFormat = "d MMM, HH:mm"
+        formatter.dateFormat = format
         return formatter
-    }()
+    }
 
     /// Whether two instants fall on the same Jakarta day.
     static func isSameDay(_ a: Date, _ b: Date) -> Bool {

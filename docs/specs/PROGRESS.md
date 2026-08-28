@@ -4,9 +4,9 @@ Read this file **first** at the start of every session. Update it at the end of 
 
 ## Current
 
-- **Active module:** 04 Sale — **done, 18/18**
-- **Session goal:** 04 Sale ✅
-- **Next up:** 05 History
+- **Active module:** 05 History — **done, 9/9**
+- **Session goal:** 05 History ✅
+- **Next up:** the golden path gate, then the three ADRs and polish. **No modules remain.**
 
 ## Status
 
@@ -16,9 +16,9 @@ Read this file **first** at the start of every session. Update it at the end of 
 | 02 Contact link | **done** | **8/8** | 31 new tests, 83 passing overall. Ships no screens — one shared `ContactField` that 03 and 04 embed. |
 | 03 Catalogue | **done** | **16/16** | 57 new tests, 140 passing overall. `StockService` is the only writer of `stockQty`. |
 | 04 Sale | **done** | **18/18** | 66 new tests, 206 passing overall. `SaleService` never touches `stockQty`; movements are *staged* so the whole tender is one `save()`. |
-| 05 History | todo | 0/9 | Read-only |
+| 05 History | **done** | **9/9** | 30 new tests, 236 passing overall. Owns no entity, no service, no repository — `Features/History/` contains no `save()` and no `ModelContext` (R-05-8). |
 
-**Total: 50/59 acceptance criteria.**
+**Total: 59/59 acceptance criteria. Every module is built.**
 
 ## Session order and sizing
 
@@ -80,12 +80,24 @@ Budget the remaining days for polish, the three ADRs, and the golden path run �
 | 04 | `DraftLine` conforms to `Identifiable` in an extension inside `CartView.swift` | Needed for `.sheet(item:)`. The struct declaration is untouched, and the conformance is a presentation concern, so it sits with the view rather than in `SaleDraft.swift`. | No — additive, and §7's declaration is unchanged |
 | 04 | `VoidSheet` ships with no call site | 04 §13.9 requires it and `STRUCTURE.md` puts it in this module; 04 §3 enters it from module 05, which does not exist yet. It is complete and previewable; 05 wires it to `SaleServicing.void`. | No — the specs already said both things |
 
+| 05 | Foundations §10 step 10's `+0 opening` row **deleted** | The blocker carried since session 3. Step 1 starts from an empty catalogue with no seed, step 2 creates Chitato with "no movement written", and §9 and R-03-13 both say zero stock is the *absence* of movements, never a movement of zero. The row could not exist under the system's own rules. Step 10 now reads three movements. | Yes — foundations §10 rewritten, reversal logged in `DECISIONS.md` |
+| 05 | `GoldenPathTests.swift` is **not** a module-05 file | `STRUCTURE.md`'s session table was the only source placing it here; 05 §12 defines no criterion for it and 05 §13's checklist does not list it. It belongs to the `/golden-path` gate that runs after 05, which is also where the manual ten-step run happens. Building it inside 05 would have been starting the next gate early. | Yes — `STRUCTURE.md` reassigned, reversal logged |
+| 05 | **No summary card under `Semua`** | §10's region table listed the card unconditionally while §3.4 described `Semua` as grouped-with-subtotals only. The card is a *day* summary: an all-time total can only see the loaded window, and a true one needs the unbounded fetch foundations §8 forbids. Each section header carries the figure §3.4 actually asks for. | Yes — 05 §10 gained a three-row decision table, reversal logged |
+| 05 | The oldest, half-loaded day **withholds its subtotal** | §10 wants a subtotal per day; §8 pages 100 at a time, so a page almost always ends mid-day. A partial figure presented as a day total is a lie the next scroll quietly corrects. The decision lives in `HistoryViewModel.showsSubtotal(for:)`, not the view. | Yes — 05 §10, reversal logged |
+| 05 | Sale detail lines sort by `nameSnapshot`, then `id` | Foundations §6 bans ordered relationships and requires an explicit sort; `SaleLine` carries no ordinal and no `createdAt`, so the order was whatever the fetch produced. A cart order would need a new stored field on a module 04 model. Pinned by `test_linesAreDeterministicallyOrdered`. | Yes — 05 §10 |
+| 05 | `SaleDetailViewModel.swift` is a sixth file in `Features/History/` | A View may not call a Service and **Batalkan** is a service call. Same precedent as 03's `ProductDetailViewModel` and 02's `ContactFieldViewModel`. `STRUCTURE.md` listed five files and no ViewModel for the detail screen. | Yes — `STRUCTURE.md` updated |
+| 05 | `JakartaDay` gained `time`, `longDate`, `fullDateTime` and `previousDay` | 05 §10 requires `HH:mm` and `d MMM yyyy` in Jakarta and neither existed; "Kemarin" is a day boundary and CONVENTIONS says no feature computes its own. The alternative is each screen building a formatter, and one that forgets `timeZone` is the exact bug `JakartaDay` exists to prevent. All four formatters now come from one private builder that cannot omit the zone. | Yes — `STRUCTURE.md` updated |
+| 05 | `HistoryViewModelTests.swift` and `SaleDetailViewModelTests.swift` added | AC-05-4..8 are ViewModel decisions and views are never tested. `STRUCTURE.md` listed only `DaySummaryTests`. Same precedent as sessions 3 and 4. | Yes — `STRUCTURE.md` updated |
+| 05 | `HistoryViewModel` takes an injected `now: () -> Date` | AC-05-5 and the Kemarin boundary need a pinned "today"; `Date()` cannot be. Defaulted to `Date.init`, so no call site in the app changes. Same shape as session 4's one-instant-per-operation. | No — internal to the module, and defaulted |
+| 05 | `PaymentMethod.label` and `.icon` live in `SaleRow.swift` | Operator-facing strings next to the only thing that renders them — the precedent 03 set with `StockReason.label` in `StockMovementRow.swift`. Raw values stay English. | No — §10 already names the two icons and §11 the two labels |
+| 05 | `RootTabView.PlaceholderScreen` deleted | Riwayat was its last call site. Dead code, removed with the tab it stood in for. | No |
+
 Record every deviation here the moment it happens. An undocumented deviation is how a codebase stops matching its spec.
 
 ## Open questions raised during build
 
 - [x] **Resolved this session** — all four blockers (entities in 01, the seed's write path, CloudKit, repository surface) plus `JakartaDay`, `Rp` spacing, `AppContainer` scope, `BarcodeKind` edges, and seed suppliers. Answers are in the Deviations table above.
-- [ ] **For module 05 — golden path §10 step 10 is unbuildable as written.** It says Chitato's history shows `+2 void · -2 sale · +24 restock · **+0 opening**`. But step 1 starts from an empty catalogue with no seed, step 2 creates Chitato with "no movement written", and foundations §9 / R-03-13 state that zero stock is the *absence* of movements, never a movement of zero. That `+0 opening` row cannot exist. `GoldenPathTests` will fail on it. Decide before session 5 whether to drop the row from the golden path or change the rule.
+- [x] **Resolved in session 5 — the `+0 opening` row is dropped from the golden path.** The rule wins over the plan: zero stock is the absence of movements (foundations §9, R-03-13), so a movement of zero is unrepresentable by design and step 10 was describing a row the system forbids. Foundations §10 now reads three movements, not four, with the reason stated inline. Reversal logged in `DECISIONS.md`.
 - [x] **Resolved in session 2 — `resolve(id:)` tolerates a seed identifier.** `ContactService.resolve` maps every read failure, `recordDoesNotExist` included, to `nil`; only a refused permission throws (R-02-4). Pinned by `test_R0204_seedIdentifierResolvesToNil`.
 - [x] **Resolved in session 2** — the seven questions raised at the 02 plan gate (gone-state trigger, contact card, `.notDetermined`, host accessors, fake location, presenter naming, AC-02-8 provability). Answers are in the Deviations table above.
 - [x] **Resolved in session 3 — `ContactField` is embedded, never constructed by a View.** `ProductFormViewModel` and `ProductDetailViewModel` each own a `ContactFieldViewModel` and read `.ref` at save time. Pinned by `test_formAttachesTheSupplierToTheProduct` and `test_detailPersistsASupplierChange`.
@@ -93,8 +105,10 @@ Record every deviation here the moment it happens. An undocumented deviation is 
 - [x] **Resolved in session 4 — a zero-quantity line aborts the tender, it is not skipped.** The session-3 note suggested skipping; R-04-16 makes the cart remove such a line, so a zero-qty draft can only be hand-built, and silently dropping a line the operator can see is worse than refusing. Pinned by `test_R0416_zeroQuantityLineIsRejected`.
 - [x] **Resolved in session 4 — every stock call from 04 carries the sale's `id`.** `stage` shares `record`'s body, so R-03-13's pairing is enforced identically. Pinned by `test_AC0409_oneSaleMovementPerLine` and `test_AC0410_R0413_voidReversesMoneyAndStockTogether`.
 - [x] **Resolved at the session 4 plan gate** — the ten questions raised there (`record` vs one save, R-03-14 against 04 §8, resolving a `productID` to a `Product`, a genuinely missing product, rollback after a failed commit, the unknown-barcode destination, where the customer field lives, a zero-qty line, cash with no amount, QRIS with an amount). Answers are in the Deviations table above.
-- [ ] **For module 05 — `VoidSheet` exists and is unwired.** `Features/Sale/VoidSheet.swift` is complete: it takes a `Sale` and hands back a trimmed reason. 05's sale detail presents it and calls `SaleServicing.void(_:reason:)`. Do not reimplement it, and do not put void logic in `Features/History/`.
-- [ ] **For module 05 — paging is `allSales(limit:offset:)`.** It windows a `createdAt`-descending list in memory (foundations §8 sizes this at ~18,000 rows a year). `sales(onJakartaDay:)` includes voided sales; excluding them from *totals* is R-05-2's job, not the repository's.
+- [x] **Resolved in session 5 — `VoidSheet` is wired and was not reimplemented.** `SaleDetailView` presents module 04's sheet unchanged and hands its trimmed reason to `SaleServicing.void`. Trimming, the length rule, the stock reversal and the single commit all stayed in module 04; `Features/History/` holds no void logic at all. Pinned by `test_R0412_voidActionDisappearsOnceVoided`, `test_R0412_secondVoidIsRefusedWithAMessage` and `test_R0414_blankReasonIsRefused`.
+- [x] **Resolved in session 5 — paging is `allSales(limit:offset:)` and it appends.** `Semua` reads 100, appends 100 on scroll, and re-reads its own window in place after a void rather than collapsing to page one. `sales(onJakartaDay:)` still returns voided sales and `DaySummary` still excludes them from the money — R-05-2 stayed the summary's job, never the repository's. Pinned by `test_semuaPagesAndWithholdsThePartialSubtotal` and `test_AC0507_refreshKeepsTheLoadedWindow`.
+- [x] **Resolved at the session 5 plan gate** — the eight questions raised there (`GoldenPathTests`' ownership and the `+0 opening` row, the summary card under `Semua`, the partial-day subtotal, sale-line ordering, `SaleDetailViewModel`, the two ViewModel test files, the missing `JakartaDay` formatters, the per-scope empty strings). Answers are in the Deviations table above.
+- [ ] **No open questions remain for any module.** The next gate is the golden path, run by hand from foundations §10.
 
 ## Written test exemptions
 
@@ -119,6 +133,8 @@ Per `CONVENTIONS.md` §Testing, every rule gets a test or a written note saying 
 | AC-04-18, the wall-clock half | "Interactive within 1 second" on a device is not a unit test. | `test_AC0418_tenderResetsTheCart` proves the reset is *synchronous* — the cart is empty the instant `tender` returns, and the success screen is an overlay on top of an already-ready screen, not something the reset waits for. The elapsed time is asserted under 1 s in-test and was observed instant in the simulator. |
 | R-04-11 (a completed sale is immutable except for the void fields) | Partly structural: nothing on `SaleServicing` mutates a `Sale` except `void`. | `test_R0411_aCompletedSaleIsImmutableExceptForTheVoidFields` pins the consequence — after a void, number, total, line count, cash, change and method are all unchanged. |
 | 04 §11's `20260821-001` literal | `complete` allocates from `Date()`, and no spec gives it an injectable clock. | `SaleNumberingTests` asserts the **shape** and the **sequence** against today's Jakarta key, and the day-boundary property directly against `SaleRepository.countOfSales(onJakartaDay:)` with §11's exact instants (21 Aug 23:58 WIB and 22 Aug 00:03 WIB, which are the same UTC day). |
+| R-05-8 / AC-05-9 (no `save()`, no `insert(`, no `ModelContext` in `Features/History/`) | The rule's own wording is "Grep is the test" — it is not a runtime behaviour. | `grep -rn "save(\|insert(\|ModelContext\|import SwiftData" JustScan/Features/History/` — one hit, and it is the comment at `HistoryViewModel.swift:10` saying the folder does none of these. Made structurally true rather than remembered: the folder holds no service and no repository, so there is nothing there that *could* write. |
+| The three module-05 screens (`HistoryView`, `SaleDetailView`, `SaleRow`) | Views are never tested (CONVENTIONS §Testing). | Every decision they render is a ViewModel decision and is pinned: scope, day boundary, grouping, paging, which subtotal is honest, which empty string, whether **Batalkan** appears, and whether the cash rows do. The screens compile and the Riwayat tab is wired in `RootTabView`; the on-screen pass is manual. |
 | The scanner and picker paths in `CartView` | Same as AC-01-4/5 and AC-02-1/2: the camera and the contact picker need a device and a human. | `CartViewModelTests` drives every one of those decisions through `FakeScannerService` and `FakeContactService`; the ViewModel cannot tell the difference. The screen itself was launched in the simulator and its empty state, total, and disabled `Bayar`/`Buang` verified by eye. |
 
 ## Conventions added this build
@@ -134,6 +150,9 @@ Mirror anything added here into `CONVENTIONS.md`.
 - **A multi-repository operation stages, it does not record.** A service whose work must join another service's transaction exposes a non-committing variant; the caller commits once. `record` commits, `stage` does not (session 4).
 - **`rollback()` sits beside `save()`.** A caught save error otherwise leaves the operation's inserts in the shared context, to be committed by the next successful save (session 4).
 - **One instant per business operation, passed down.** `complete` captures `createdAt` once and hands it to the number, the sale, and every movement — hence `stage(… at:)` (session 4).
+- **`JakartaDay` owns every date formatter, and builds them all through one private factory.** A formatter declared inline can forget `timeZone`; one built by `JakartaDay.formatter(format:)` cannot. Added session 5 when 05 needed `HH:mm` and `d MMM yyyy`.
+- **A figure derived from a partial read is withheld, not shown and corrected later.** `Semua`'s oldest day is half-loaded while another page exists, so its subtotal is a partial figure wearing a day total's label. The decision is the ViewModel's (`showsSubtotal(for:)`), not the view's. Added session 5.
+- **A read-only module owns no service and no repository.** `Features/History/` consumes module 04's `SaleServicing` and nothing else, which is what makes "this module never writes" a property of the file tree rather than a rule someone remembers (R-05-8). Added session 5.
 
 ## Definition of done, per module
 
@@ -152,4 +171,4 @@ The final gate before the project is called complete. Run the ten numbered steps
 
 | Run | Date | Result | Failures |
 |---|---|---|---|
-| — | — | not yet run | blocked until 05 — steps 7 and 9 need the history screens. Steps 1–6 and 8 are now buildable and are covered piecewise by `CatalogueServiceTests`, `StockServiceTests`, `SaleServiceTests`, `SaleNumberingTests` and `SaleVoidTests`. The step-10 `+0 opening` row is still unbuildable; see the open question above. |
+| — | — | not yet run | **No longer blocked.** All ten steps are now buildable: 05 shipped the history screens steps 7 and 9 need, and step 10's impossible `+0 opening` row was deleted from foundations §10 this session. Every step is covered piecewise by `CatalogueServiceTests`, `StockServiceTests`, `SaleServiceTests`, `SaleNumberingTests`, `SaleVoidTests`, `DaySummaryTests` and `HistoryViewModelTests`. The end-to-end run by hand is the remaining gate. |
