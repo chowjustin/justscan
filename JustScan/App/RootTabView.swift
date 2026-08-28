@@ -5,8 +5,8 @@
 //  Three tabs, Jual selected on launch — the cashier screen is the app's home,
 //  not the catalogue (01 §3).
 //
-//  Produk is module 03's `ProductListView`. Jual and Riwayat are still
-//  placeholders; modules 04 and 05 replace them with their own screens.
+//  Jual is module 04's `CartView` and Produk is module 03's `ProductListView`.
+//  Riwayat is still a placeholder; module 05 replaces it.
 //
 
 import SwiftUI
@@ -25,13 +25,9 @@ struct RootTabView: View {
 
     var body: some View {
         TabView(selection: $selection) {
-            PlaceholderScreen(
-                title: "Jual",
-                systemImage: "cart",
-                message: "Layar kasir dibuat di modul 04."
-            )
-            .tabItem { Label("Jual", systemImage: "cart") }
-            .tag(Tab.jual)
+            CartView(container: container)
+                .tabItem { Label("Jual", systemImage: "cart") }
+                .tag(Tab.jual)
 
             ProductListView(container: container)
                 .tabItem { Label("Produk", systemImage: "shippingbox") }

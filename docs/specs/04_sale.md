@@ -22,7 +22,7 @@ The screen must never navigate away from itself during a normal sale. That const
 - No receipt printing, no email, no SMS. `[Later]`
 - No QRIS gateway, no callback, no payment verification. Static QR, manual confirmation.
 - No held/parked sales. One cart at a time. `[Later]`
-- Does not write `stockQty`. It calls `StockServicing.record` and nothing else.
+- Does not write `stockQty`. It goes through `StockServicing` and nothing else.
 
 ## 2. Roles & permissions
 
@@ -50,8 +50,8 @@ Single operator. Note explicitly: **void has no approval step** — there is nob
    a. Allocate `number` (R-04-4)
    b. Insert `Sale` with `status = .completed`
    c. Insert every `SaleLine` with snapshots
-   d. For each line, `StockService.record(delta: −qty, reason: .sale, saleID:)`
-   e. Save once
+   d. For each line, `StockService.stage(delta: −qty, reason: .sale, saleID:, at: createdAt)`
+   e. Save once, through `ProductRepository.save()`
 6. Success screen: **change due**, large. Auto-dismisses after 3 s, or on tap.
 7. Cart resets to empty. Screen is ready for the next customer in **under 1 second**.
 
@@ -66,8 +66,8 @@ Single operator. Note explicitly: **void has no approval step** — there is nob
 2. Confirm sheet, reason required, free text, 1–120 chars.
 3. `SaleService.void(...)`, one transaction:
    a. `status = .voided`, `voidedAt = .now`, `voidReason` set
-   b. For each line, `StockService.record(delta: +qty, reason: .void, saleID:)`
-   c. Save once
+   b. For each line, `StockService.stage(delta: +qty, reason: .void, saleID:, at: voidedAt)`
+   c. Save once, through `ProductRepository.save()`
 4. The number is **retained**. Nothing is deleted.
 
 ## 4. Rules & validations
@@ -88,7 +88,7 @@ Single operator. Note explicitly: **void has no approval step** — there is nob
 | R-04-12 | Void is idempotent-guarded: voiding an already-voided sale throws `saleAlreadyVoided`. |
 | R-04-13 | A void writes exactly one `+qty` `.void` movement per original line, carrying the same `saleID`. Money and stock reverse together or neither does. |
 | R-04-14 | `voidReason` is required, trimmed, 1–120 chars. A void with no reason is a void nobody can explain later. |
-| R-04-15 | Sale commit and void commit are each **one** `save()`. A partial write — sale persisted, movements not — is the worst bug this system can have. |
+| R-04-15 | Sale commit and void commit are each **one** `save()`. A partial write — sale persisted, movements not — is the worst bug this system can have. This is why movements are *staged* (`StockServicing.stage`, 03 §7) rather than recorded: `record` commits itself, so one call per line would be one save per line. If the single commit throws, the operation rolls back (`ProductRepository.rollback()`) and nothing at all was written. |
 | R-04-16 | `qty` is an `Int` ≥ 1. Reducing a line to 0 removes the line. |
 
 ## 5. Data model
@@ -163,19 +163,27 @@ struct DraftLine: Equatable {
 **Imports**
 
 ```
-CatalogueService.findBy(barcode:)                 // 03 — scan lookup
-StockService.record(product:delta:reason:saleID:)  // 03 — the ONLY stock path
-ScannerService.scan()                              // 01
-ContactService.pick()                              // 02 — optional customer
-Rp.format(_:)                                      // 01
+CatalogueService.findBy(barcode:)                     // 03 — scan lookup
+StockService.stage(product:delta:reason:note:saleID:at:)  // 03 — the ONLY stock path
+ProductRepository.findAny(id:)                        // 01 — the row a movement attaches to,
+                                                      //      soft-deleted rows included (§8)
+ProductRepository.save() / .rollback()                // 01 — the one commit per operation
+ScannerService.scan()                                 // 01
+ContactService.pick()                                 // 02 — optional customer
+Rp.format(_:)                                         // 01
 ```
 
 **Internal only:** `SaleRepository`, number allocation, the tender state machine. Module 05 reads sales and requests voids through `SaleServicing`; it never writes.
 
+`SaleService` holds `ProductRepository` for exactly two reasons and no others:
+resolving a `DraftLine.productID` to the row its movement attaches to, and owning
+the single `save()`/`rollback()` pair for the whole operation. It never inserts a
+product, never edits one, and never touches `stockQty` (AC-04-17).
+
 ## 8. Edge cases
 
 - **Same product scanned five times.** One line, `qty 5` (R-04-2).
-- **Unknown barcode mid-sale.** Banner offers "Tambah Produk Baru". Taking it navigates away and **discards the cart** — so the banner must say so. Alternative accepted for MVP: the operator finishes the sale first, then adds the product. Do not build a cart-preserving detour.
+- **Unknown barcode mid-sale.** Banner offers "Tambah Produk Baru". Taking it pushes `ProductFormView` onto the **Jual tab's own** navigation stack — not a tab switch, which would need cross-tab plumbing in module 01's `RootTabView` — and **discards the cart** on the way, so the banner says so. Saving returns to the empty cart, ready to scan what was just created. Alternative accepted for MVP: the operator finishes the sale first, then adds the product. Do not build a cart-preserving detour.
 - **Line reduced to qty 0.** Line is removed (R-04-16).
 - **All lines removed.** Cart is empty, Bayar disables, screen returns to its empty state.
 - **Cash exactly equal to total.** `changeRp = 0`. Valid, and distinct from QRIS's `nil` (R-04-10).
@@ -193,10 +201,30 @@ Rp.format(_:)                                      // 01
 
 | Type | Method | Purpose | Errors |
 |---|---|---|---|
-| `SaleServicing` | `complete` | Tender and commit | `emptyCart`, `insufficientCash`, `validationFailed`, `persistenceFailed` |
-| `SaleServicing` | `void` | Reverse money and stock | `saleAlreadyVoided`, `validationFailed`, `persistenceFailed` |
+| `SaleServicing` | `complete` | Tender and commit | `emptyCart`, `insufficientCash`, `validationFailed`, `productNotFound`, `persistenceFailed` |
+| `SaleServicing` | `void` | Reverse money and stock | `saleAlreadyVoided`, `validationFailed`, `productNotFound`, `persistenceFailed` |
 | `SaleServicing` | `sales(onJakartaDay:)` | Day's sales for 05 | `persistenceFailed` |
 | `SaleServicing` | `allSales(limit:offset:)` | History list for 05 | `persistenceFailed` |
+
+**Which `validationFailed` field, and when `productNotFound`.** §4 names the
+rules but not the field each carries, so they are fixed here:
+
+| Method | Condition | Error |
+|---|---|---|
+| `complete` | a line at `qty < 1` (R-04-16) — unreachable from the cart, which removes the line | `validationFailed(field: "qty")` |
+| `complete` / `void` | a line's `productID` resolves to no row at all | `productNotFound` |
+| `void` | `voidReason` blank or over 120 chars after trimming (R-04-14) | `validationFailed(field: "reason")` |
+
+`productNotFound` covers a stale reference only. A **soft-deleted** product is
+not one: the sale completes and the void reverses, both onto that product's
+ledger (§8). What it refuses is money moving with no stock behind it — the same
+"together or neither" that R-04-13 states for the void.
+
+**Cash and QRIS at the boundary.** §4 fixes what is stored but not what a caller
+may pass, so: `method == .cash` with `cashReceivedRp == nil` is not a free sale —
+it is `insufficientCash(shortfallRp: totalRp)`. `method == .qris` with a non-nil
+`cashReceivedRp` discards it rather than throwing; R-04-10 is about what is
+stored, and storing a number that means nothing is the failure it names.
 
 ## 10. UI notes
 
@@ -209,9 +237,11 @@ Vertical layout, top to bottom:
 | Top | Cart lines, scrollable. Newest **at the top** — the operator watches the thing they just scanned appear where their eye already is. |
 | Line row | Name · `qty × unitPrice` · line total, right-aligned. Red "Stok habis" chip when the product's stock ≤ 0. Tap → qty stepper. Swipe → delete. |
 | Bottom bar, fixed | **Total** in the largest type on the screen. Below it: a full-width **Scan** button and a **Bayar** button. Both reachable one-handed, in the bottom third. |
+| Customer | Module 02's `ContactField`, labelled "Pelanggan", below the lines. On the **cart** screen, not the tender sheet — §3.9 puts attaching a customer in the ring-up flow, and the sheet's own contents list does not mention it. Optional, always (R-02-7). |
 | Empty state | "Scan barang untuk mulai" and the scan button. No illustration, no empty-state art. |
 
-**Tender sheet** — total, `Tunai | QRIS` segmented control, cash field with quick-pick chips, confirm.
+**Tender sheet** — total, `Tunai | QRIS` segmented control, cash field with quick-pick chips, confirm. The `Pas` chip is first, then the R-04-9 round-ups ascending, matching §11's order.
+**Quantity stepper** — tapping a line opens a sheet with a `Stepper` bounded `0...9999`; 0 is reachable and removes the line, which the footer says plainly (R-04-16).
 **Success** — change due in the largest type the screen allows, or "Lunas — QRIS". Auto-dismiss 3 s.
 **Void sheet** — sale summary, required reason field, destructive confirm.
 

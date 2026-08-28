@@ -75,7 +75,7 @@ Single operator. Everything in this module is available to them.
 | R-03-10 | Movements are **immutable and never deleted**. A wrong movement is corrected by an offsetting `.adjustment`, never by editing or removing the original. |
 | R-03-11 | Inserting a movement and updating `stockQty` happen in one `save()`. A movement without its cache update, or a cache update without its movement, is a data-integrity bug. |
 | R-03-12 | Deletion is soft. `deletedAt != nil` excludes a product from every list and every lookup, including scan. It never removes it from a past sale. |
-| R-03-14 | Any service call that **writes** to a product that is missing or soft-deleted throws `productNotFound`. Applies to `update`, `softDelete`, `record`, `adjust`, and `recompute` — a stale reference must fail loudly, not write to a dead row. "Missing" means `ProductRepository.find(id:)` does not return it. `movements(for:)` is exempt: it writes nothing, and §8 keeps a deleted product's movements "for audit", which is unreadable if the only reader refuses. |
+| R-03-14 | Any service call that **writes** to a product that is missing or soft-deleted throws `productNotFound`. Applies to `update`, `softDelete`, `record`, `adjust`, and `recompute` — a stale reference must fail loudly, not write to a dead row. "Missing" means `ProductRepository.find(id:)` does not return it. Two exemptions: `movements(for:)` writes nothing, and §8 keeps a deleted product's movements "for audit", which is unreadable if the only reader refuses; and `stage` (§7) rejects a **missing** product but accepts a **soft-deleted** one, because 04 §8 requires a sale of goods deleted mid-cart, and the void reversing it, to land on that product's ledger. "Missing" for `stage` means `ProductRepository.findAny(id:)` does not return it. |
 | R-03-13 | `StockReason` is exactly: `opening`, `restock`, `sale`, `void`, `adjustment`. `sale` and `void` carry a non-nil `saleID`; the other three carry nil. |
 
 ## 5. Data model
@@ -141,6 +141,8 @@ protocol CatalogueServicing {
 protocol StockServicing {
     func record(product: Product, delta: Int,
                 reason: StockReason, note: String?, saleID: UUID?) throws
+    func stage(product: Product, delta: Int, reason: StockReason,
+               note: String?, saleID: UUID?, at createdAt: Date) throws
     func adjust(product: Product, countedQty: Int, note: String) throws
     func recompute(product: Product) throws -> Int     // returns new qty
     func movements(for product: Product) throws -> [StockMovement]  // newest first
@@ -155,7 +157,16 @@ BarcodeKind.of(_:)         // 01 — classify it for R-03-8
 ContactService.pick()      // 02 — attach a supplier
 ```
 
-**Internal only:** `ProductRepository`, `StockMovementRepository`, the `stockQty` cache update. Module 04 changes stock **only** through `StockServicing.record` — it may never write `stockQty` itself.
+`stage` is `record` without the commit, stamped with a caller-supplied instant.
+It exists for module 04 alone. `SaleService.complete` must put the sale, its
+lines, and every movement in **one** `save()` (R-04-15); calling `record` per
+line would save per line, and a failure on line two would leave line one's
+movement committed — the exact partial write that rule exists to prevent. The
+`createdAt` parameter is there for the same reason: a tender captures one
+instant and reuses it for the number, the sale, and every movement (04 §8).
+The caller commits, exactly once, through `ProductRepository.save()`.
+
+**Internal only:** `ProductRepository`, `StockMovementRepository`, the `stockQty` cache update. Module 04 changes stock **only** through `StockServicing.record` and `StockServicing.stage` — it may never write `stockQty` itself.
 
 ## 8. Edge cases
 
@@ -180,6 +191,7 @@ ContactService.pick()      // 02 — attach a supplier
 | `CatalogueServicing` | `findBy(barcode:)` | Scan lookup | `persistenceFailed` |
 | `CatalogueServicing` | `all` / `search` | List and filter | `persistenceFailed` |
 | `StockServicing` | `record` | Append a movement + update cache | `validationFailed`, `productNotFound`, `persistenceFailed` |
+| `StockServicing` | `stage` | Append a movement + update cache, **no commit** | `validationFailed`, `productNotFound`, `persistenceFailed` |
 | `StockServicing` | `adjust` | Set to a counted quantity | `validationFailed`, `productNotFound`, `persistenceFailed` |
 | `StockServicing` | `recompute` | Rebuild cache from ledger | `productNotFound`, `persistenceFailed` |
 | `StockServicing` | `movements(for:)` | Read the ledger | `persistenceFailed` |
@@ -193,6 +205,7 @@ carries, so they are fixed here:
 | `create` / `update` | `priceRp <= 0` (R-03-5) | `"price"` |
 | `record` | `delta == 0` — §5 says never zero, and R-03-13 forbids a movement of zero | `"qty"` |
 | `record` | `reason.requiresSaleID != (saleID != nil)` (R-03-13) | `"reason"` |
+| `stage` | the same two conditions as `record` — it shares the body | `"qty"` / `"reason"` |
 | `adjust` | `countedQty < 0` — nobody counts a negative number off a shelf | `"qty"` |
 | `adjust` | `note` blank — a reasonless correction is unreadable a month later | `"reason"` |
 

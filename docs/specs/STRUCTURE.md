@@ -106,11 +106,16 @@ Core/
 │   └── ContactField.swift             the shared 3-state row (03 and 04 both embed it)
 ├── Stock/                             ← owned by 03, lives in Core because 04 calls it
 │   ├── StockReason.swift              + `requiresSaleID`, which is R-03-13 made enforceable
-│   └── StockService.swift             protocol + concrete
+│   └── StockService.swift             protocol + concrete. `stage()` added session 4:
+│                                      `record` without the commit, so 04 can put a sale,
+│                                      its lines and every movement in one save (R-04-15).
 ├── Persistence/
 │   ├── PersistenceController.swift    the Schema and ModelContainer
 │   ├── ProductRepository.swift        protocol + SwiftDataProductRepository. `find(id:)`
 │   │                                  added session 3: it is how R-03-14 detects "missing".
+│   │                                  `findAny(id:)` and `rollback()` added session 4 —
+│   │                                  the deleted-inclusive read 04 §8 needs, and the
+│   │                                  discard half of the one-commit-per-operation pair.
 │   ├── StockMovementRepository.swift
 │   └── SaleRepository.swift           incl. number allocation (R-04-4)
 ├── Errors/
@@ -141,10 +146,11 @@ Features/
 │   ├── SaleService.swift              protocol + concrete. complete() and void().
 │   ├── SaleDraft.swift                DraftLine + the in-memory cart. Never persisted.
 │   ├── CartView.swift
-│   ├── CartViewModel.swift            R-04-2 line merging lives here
+│   ├── CartViewModel.swift            R-04-2 line merging lives here, and the customer
+│   │                                  `ContactFieldViewModel` (04 §3.9 puts it on the cart)
 │   ├── CartLineRow.swift
 │   ├── TenderSheet.swift
-│   ├── TenderViewModel.swift
+│   ├── TenderViewModel.swift          the sheet's arithmetic, so the sheet does none
 │   ├── CashQuickPicks.swift           R-04-9. Pure function, easy to test.
 │   ├── PaymentSuccessView.swift       change due, auto-dismiss 3 s
 │   └── VoidSheet.swift                required reason
@@ -168,7 +174,10 @@ JustScanTests/
 │   ├── FakeContactService.swift
 │   ├── FakeScannerService.swift
 │   ├── InMemoryProductRepository.swift      a `save()` that can be made to fail
-│   └── InMemoryStockMovementRepository.swift
+│   ├── InMemoryStockMovementRepository.swift
+│   └── FailingSaveProductRepository.swift   added session 4 — the same forced failure
+│                                            over a **real** store, so AC-04-16 can ask a
+│                                            second context what actually landed
 ├── Core/
 │   ├── RpTests.swift                   R-01-2 — the five exact strings
 │   ├── BarcodeKindTests.swift          R-01-8 — the five exact classifications
@@ -184,9 +193,10 @@ JustScanTests/
 ├── Sale/
 │   ├── SaleServiceTests.swift          R-04-3, R-04-5..8, R-04-15 (write this one first)
 │   ├── SaleNumberingTests.swift        R-04-4 across a Jakarta day boundary
-│   ├── SaleVoidTests.swift             R-04-12..14
+│   ├── SaleVoidTests.swift             R-04-11..14
 │   ├── CashQuickPicksTests.swift       R-04-9
-│   └── CartViewModelTests.swift        R-04-2, R-04-16
+│   ├── CartViewModelTests.swift        R-04-2, R-04-16, AC-04-1/2/18
+│   └── TenderViewModelTests.swift      added session 4 — the sheet's own decisions
 ├── History/
 │   └── DaySummaryTests.swift           R-05-1..7, incl. the §11 worked example
 └── GoldenPathTests.swift               all ten steps, one test, fresh container
@@ -221,7 +231,7 @@ Real enforcement would mean local SPM packages, one per module, with explicit de
 | 1 | 01 App shell | `App/`, `Models/` (storage-only declarations), `Core/Money`, `Core/Time`, `Core/Barcode`, `Core/Stock/StockReason`, `Core/Errors`, `Core/Persistence`, `Core/Debug`, `JustScanTests/Support`, `JustScanTests/Core`, `JustScanTests/Debug` |
 | 2 | 02 Contact link | `Core/Contacts/` |
 | 3 | 03 Catalogue | `Models/Product`, `Models/StockMovement`, `Core/Stock/`, the two repositories, `Features/Catalogue/`, `JustScanTests/Catalogue/` |
-| 4 | 04 Sale | `Models/Sale`, `Models/SaleLine`, `SaleRepository`, `Features/Sale/`, `JustScanTests/Sale/` |
+| 4 | 04 Sale | `SaleRepository` (filled), `Features/Sale/`, `JustScanTests/Sale/`. `Models/Sale` and `Models/SaleLine` were already declared in session 1 and needed no field changes. |
 | 5 | 05 History | `Features/History/`, `JustScanTests/History/`, `GoldenPathTests` |
 
 Roughly 60 Swift files. If a session is producing appreciably more than its row above, it has taken on work that belongs to a later module — stop and check the spec's non-goals.

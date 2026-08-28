@@ -64,6 +64,12 @@ Each arrow is one-directional. Each layer may only call the one to its right.
 
 **A read-only screen never raises a permission prompt.** Permission is asked at the moment the operator asked for the thing that needs it, never as a side effect of rendering a screen they only wanted to read. Added session 2.
 
+**A multi-repository operation stages; it does not record.** When a service method must commit work belonging to another service in the same transaction, that other service exposes a non-committing variant and the caller commits once. `StockServicing.record` commits itself; `StockServicing.stage` does not, which is what lets `SaleService.complete` put a sale, its lines, and every movement in one `save()` (R-04-15). A method that commits per item cannot be composed into a transaction. Added session 4.
+
+**`rollback()` sits beside `save()`, and only a failed commit calls it.** A caught save error leaves the operation's inserts in the shared `ModelContext`, where the next successful save commits them — so a retried tender would commit the abandoned attempt too. `ProductRepository.rollback()` discards them. It lives on `ProductRepository` for the same reason `save()` does. Added session 4.
+
+**An instant is captured once per operation and passed down.** `SaleService.complete` captures `createdAt` at the start and hands it to the number, the sale, and every movement, which is why `stage` takes an `at:` parameter. Two calls to `Date()` inside one business operation is a bug waiting for a day boundary. Added session 4.
+
 ---
 
 ## SwiftData rules — violating these breaks iCloud silently

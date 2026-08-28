@@ -26,6 +26,14 @@ protocol ProductRepository {
     /// row (R-03-14).
     func find(id: UUID) throws -> Product?
 
+    /// Product with this identifier **whether or not it is soft-deleted**.
+    ///
+    /// The one read that deliberately sees dead rows. Module 04 needs it: a
+    /// sale of a product that was soft-deleted mid-cart still records its
+    /// movement against that product's ledger, and so does the void that
+    /// reverses it (04 §8). Every other caller wants `find(id:)`.
+    func findAny(id: UUID) throws -> Product?
+
     /// All non-deleted products, name-ascending.
     func all() throws -> [Product]
 
@@ -40,6 +48,15 @@ protocol ProductRepository {
     /// is what makes "one save per business operation" structurally obvious
     /// rather than a rule someone has to remember (R-03-11, R-04-15).
     func save() throws
+
+    /// Discard everything staged since the last `save()`.
+    ///
+    /// Lives beside `save()` for the same reason, and is called on exactly one
+    /// path: a business operation whose commit threw. Without it the failed
+    /// operation's inserts stay in the shared context and ride along on the
+    /// next successful save — a second attempt at a tender would commit the
+    /// first attempt's sale too (04 §8, AC-04-16).
+    func rollback()
 }
 
 struct SwiftDataProductRepository: ProductRepository {
@@ -61,6 +78,15 @@ struct SwiftDataProductRepository: ProductRepository {
         try all().first { $0.id == id }
     }
 
+    func findAny(id: UUID) throws -> Product? {
+        // Not routed through `all()`: this is the one read that must see rows
+        // `all()` filters out.
+        let descriptor = FetchDescriptor<Product>(
+            sortBy: [SortDescriptor(\Product.name, order: .forward)]
+        )
+        return try context.fetch(descriptor).first { $0.id == id }
+    }
+
     func all() throws -> [Product] {
         let descriptor = FetchDescriptor<Product>(
             sortBy: [SortDescriptor(\Product.name, order: .forward)]
@@ -74,5 +100,9 @@ struct SwiftDataProductRepository: ProductRepository {
 
     func save() throws {
         try context.save()
+    }
+
+    func rollback() {
+        context.rollback()
     }
 }

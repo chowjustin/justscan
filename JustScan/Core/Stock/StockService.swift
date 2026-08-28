@@ -20,6 +20,25 @@ import OSLog
 protocol StockServicing {
     func record(product: Product, delta: Int,
                 reason: StockReason, note: String?, saleID: UUID?) throws
+
+    /// `record` without the commit, stamped with a caller-supplied instant.
+    ///
+    /// Exists for module 04 alone. `SaleService.complete` has to put the sale,
+    /// its lines, and every movement in **one** `save()` (R-04-15); calling
+    /// `record` per line would save per line, and a failure on line two would
+    /// leave line one's movement committed — the partial write that rule
+    /// exists to prevent. The caller commits, exactly once.
+    ///
+    /// `createdAt` is a parameter for the same reason: a tender captures one
+    /// instant and reuses it for the number, the sale, and every movement
+    /// (04 §8, CONVENTIONS.md §Time).
+    ///
+    /// Unlike the four committing methods it tolerates a **soft-deleted**
+    /// product: a sale of goods deleted mid-cart, and the void that reverses
+    /// it, both still belong on that product's ledger (04 §8). It still
+    /// refuses a product that was never inserted.
+    func stage(product: Product, delta: Int, reason: StockReason,
+               note: String?, saleID: UUID?, at createdAt: Date) throws
     func adjust(product: Product, countedQty: Int, note: String) throws
     func recompute(product: Product) throws -> Int     // returns new qty
     func movements(for product: Product) throws -> [StockMovement]  // newest first
@@ -36,16 +55,35 @@ struct StockService: StockServicing {
         self.ledger = movements
     }
 
-    /// Appends one movement and moves the cache by the same amount.
+    /// Appends one movement, moves the cache by the same amount, and commits.
+    func record(product: Product, delta: Int,
+                reason: StockReason, note: String?, saleID: UUID?) throws {
+        try requireLive(product)
+        // One save for the whole operation, committing the movement and the
+        // cache together (R-03-11).
+        try append(product: product, delta: delta, reason: reason,
+                   note: note, saleID: saleID, at: Date())
+        try commit()
+    }
+
+    /// See the protocol. Everything `record` does except the commit, and with
+    /// the liveness check relaxed to mere existence (04 §8).
+    func stage(product: Product, delta: Int, reason: StockReason,
+               note: String?, saleID: UUID?, at createdAt: Date) throws {
+        try requireExists(product)
+        try append(product: product, delta: delta, reason: reason,
+                   note: note, saleID: saleID, at: createdAt)
+    }
+
+    /// The shared body: validate, append one movement, move the cache by the
+    /// same amount. Never commits — its two callers decide that.
     ///
     /// `delta` is never zero: recording a no-op pollutes a ledger whose whole
     /// job is to explain a quantity (03 §8, R-03-13). The cache is **never**
     /// clamped — a negative result means goods left the shelf that the ledger
     /// did not know about, which is information (R-03-7).
-    func record(product: Product, delta: Int,
-                reason: StockReason, note: String?, saleID: UUID?) throws {
-        try requireLive(product)
-
+    private func append(product: Product, delta: Int, reason: StockReason,
+                        note: String?, saleID: UUID?, at createdAt: Date) throws {
         guard delta != 0 else { throw POSError.validationFailed(field: "qty") }
         guard reason.requiresSaleID == (saleID != nil) else {
             throw POSError.validationFailed(field: "reason")
@@ -56,15 +94,12 @@ struct StockService: StockServicing {
             delta: delta,
             reason: reason,
             note: note,
-            saleID: saleID
+            saleID: saleID,
+            createdAt: createdAt
         )
 
         ledger.insert(movement)
         product.stockQty += delta
-
-        // One save for the whole operation, committing the movement and the
-        // cache together (R-03-11).
-        try commit()
 
         Self.log.info("""
             movement \(movement.id, privacy: .public) \
@@ -128,17 +163,27 @@ struct StockService: StockServicing {
 
     /// R-03-14. A reference to a product that was never inserted, or has been
     /// soft-deleted since it was handed out, fails loudly rather than writing
-    /// to a dead row.
+    /// to a dead row. Guards the four **catalogue-facing** writers.
     private func requireLive(_ product: Product) throws {
         guard product.deletedAt == nil else { throw POSError.productNotFound }
+        try requireExists(product)
+    }
 
-        let live: Product?
+    /// The weaker half of R-03-14, for `stage`.
+    ///
+    /// A soft-deleted product is a legitimate target here: 04 §8 states twice
+    /// that a sale of goods deleted mid-cart, and the void reversing it, both
+    /// land on that product's ledger — "correct and harmless". What stays
+    /// forbidden is a row that does not exist at all, which is a stale
+    /// reference and a bug.
+    private func requireExists(_ product: Product) throws {
+        let known: Product?
         do {
-            live = try products.find(id: product.id)
+            known = try products.findAny(id: product.id)
         } catch {
             throw POSError.persistenceFailed(String(describing: error))
         }
-        guard live != nil else { throw POSError.productNotFound }
+        guard known != nil else { throw POSError.productNotFound }
     }
 
     /// Never `try?` on a write path — a swallowed save failure is a lost sale

@@ -36,6 +36,44 @@ enum TestContainer {
         )
     }
 
+    /// Module 04's wiring: the two module 03 services plus `SaleService`, all
+    /// over the one shared context, exactly as `AppContainer` builds them.
+    ///
+    /// `productRepository` is handed back so a test can force `save()` to fail
+    /// on the real store (AC-04-16), and `container` so a **second** context
+    /// can be asked what actually landed.
+    typealias SaleWiring = (
+        container: ModelContainer,
+        context: ModelContext,
+        products: FailingSaveProductRepository,
+        movements: StockMovementRepository,
+        catalogue: CatalogueServicing,
+        stock: StockServicing,
+        sales: SaleServicing
+    )
+
+    static func sale(saveError: Error? = nil) throws -> SaleWiring {
+        let container = try make()
+        let context = ModelContext(container)
+        let products = FailingSaveProductRepository(
+            wrapping: SwiftDataProductRepository(context: context),
+            saveError: saveError
+        )
+        let movements = SwiftDataStockMovementRepository(context: context)
+        let stock = StockService(products: products, movements: movements)
+        return (
+            container,
+            context,
+            products,
+            movements,
+            CatalogueService(products: products),
+            stock,
+            SaleService(sales: SwiftDataSaleRepository(context: context),
+                        products: products,
+                        stock: stock)
+        )
+    }
+
     /// The two module 03 services over one shared context, wired exactly as
     /// `AppContainer` wires them — so a test exercises the real save path
     /// rather than an arrangement that only exists in tests.

@@ -20,6 +20,7 @@ final class InMemoryProductRepository: ProductRepository, @unchecked Sendable {
 
     private(set) var stored: [Product] = []
     private(set) var saveCount = 0
+    private(set) var rollbackCount = 0
 
     init(stored: [Product] = []) {
         self.stored = stored
@@ -31,6 +32,10 @@ final class InMemoryProductRepository: ProductRepository, @unchecked Sendable {
 
     func find(id: UUID) throws -> Product? {
         try all().first { $0.id == id }
+    }
+
+    func findAny(id: UUID) throws -> Product? {
+        stored.first { $0.id == id }
     }
 
     func all() throws -> [Product] {
@@ -46,5 +51,9 @@ final class InMemoryProductRepository: ProductRepository, @unchecked Sendable {
     func save() throws {
         saveCount += 1
         if let saveError { throw saveError }
+    }
+
+    func rollback() {
+        rollbackCount += 1
     }
 }
