@@ -34,10 +34,11 @@ Single operator. iOS contact permission is a device-level gate, not an app role.
 5. Caller stores **both** fields on its own entity.
 
 **Re-open a contact from a stored reference (Operator)**
-1. Operator taps a supplier name on a product detail screen.
-2. `ContactService.resolve(id:)` attempts a lookup. This path **does** require authorization.
-3. Found → open the contact card.
-4. Not found, or permission refused → show the stored `contactName` as plain text with a quiet note ("Kontak tidak ditemukan"). Never an error dialog, never a blank.
+1. A product detail or tender screen renders a stored supplier / customer name.
+2. `ContactService.resolve(id:)` attempts a lookup — but **only when access has already been granted**. This path does require authorization, and a read-only screen must never be the thing that raises the prompt: the picker raises none, so this would be the app's only Contacts prompt, appearing at its least explicable moment.
+3. Found → the name renders normally. **The contact card is not opened.** Presenting one requires `CNContactViewController.descriptorForRequiredKeys()`, which fetches phone numbers, emails, and postal addresses — flatly against R-02-6 and against this module's "name and identifier only" non-goal. Changing a supplier is detach-then-pick: two taps, no new surface, no extra keys.
+4. Not found, or the fetch refused → show the stored `contactName` in secondary colour with a quiet note ("Kontak tidak ditemukan"). Never an error dialog, never a blank.
+5. Access never granted → the name renders normally, unmarked. Nothing is known about whether the contact still exists, and marking it "gone" would be a guess dressed as a fact.
 
 ## 4. Rules & validations
 
@@ -62,6 +63,16 @@ struct ContactRef: Equatable, Sendable {
 }
 ```
 
+A second value type crosses the boundary, so the framework does not have to:
+
+```swift
+enum ContactAccess: Equatable, Sendable {
+    case notDetermined   // never asked. The picker still works — it prompts for nothing.
+    case granted         // a lookup will be attempted. Covers iOS 18 limited access.
+    case denied          // denied or restricted. The snapshot renders; nothing breaks.
+}
+```
+
 Host mapping — identical field pair on both hosts:
 
 | Host | Fields |
@@ -83,9 +94,11 @@ None. `ContactRef` is an immutable value.
 protocol ContactServicing {
     @MainActor func pick() async -> ContactRef?              // nil == cancelled
     func resolve(id: String) async throws -> ContactRef?     // nil == gone
-    var authorizationStatus: CNAuthorizationStatus { get }
+    var authorizationStatus: ContactAccess { get }
 }
 ```
+
+`authorizationStatus` returned `CNAuthorizationStatus` until session 2. That type cannot cross this boundary: naming it forces `import Contacts` on every caller **and on every conformance**, the test fake included, which makes AC-02-7 unsatisfiable by construction. The status crosses as `ContactAccess` instead, which is the whole point of the module — this folder is the only place that knows Contacts exists.
 
 **Imports:** `POSError` from 01.
 **Internal only:** the `CNContactPickerViewController` wrapper. No feature module imports `Contacts` directly — grep for `import Contacts` outside this folder is a review failure.
@@ -106,7 +119,7 @@ protocol ContactServicing {
 |---|---|---|---|
 | `ContactServicing` | `pick()` | Present system picker | none — cancel returns nil |
 | `ContactServicing` | `resolve(id:)` | Look up a stored identifier | `contactAccessDenied` |
-| `ContactServicing` | `authorizationStatus` | Decide whether to offer "open contact" | — |
+| `ContactServicing` | `authorizationStatus` | Decide whether a live lookup is possible **without prompting** | — |
 
 ## 10. UI notes
 
@@ -118,7 +131,7 @@ This module ships no screens. It defines one reusable SwiftUI component that 03 
 |---|---|
 | Empty | `Pilih dari Kontak` with a `person.crop.circle.badge.plus` icon |
 | Filled | The name, plus an `xmark.circle.fill` to detach |
-| Filled, contact gone | The name in secondary colour, tapping does nothing, no error |
+| Filled, contact gone | The name in secondary colour with the note "Kontak tidak ditemukan", not tappable, no error. The detach control stays — a product whose supplier was deleted must still be re-pickable. |
 
 Label text is supplied by the caller — "Supplier" in 03, "Pelanggan" in 04. The component is otherwise identical in both, which is the point of building it here.
 
@@ -161,7 +174,9 @@ Pick a contact with organisation "Toko Grosir Budi" and no person name.
 
 1. `ContactRef` value type
 2. `ContactServicing` protocol + `FakeContactService` for tests and previews
-3. `CNContactPickerViewController` `UIViewControllerRepresentable` wrapper
+3. `CNContactPickerViewController` presenter (not a representable — see `ContactPickerPresenter.swift`)
 4. `resolve(id:)` with the R-02-3 name fallback chain
-5. `ContactField` SwiftUI component, all three states
-6. Tests for R-02-3 fallback and R-02-5 paired-nullability, against the fake
+5. `ContactFieldViewModel` — the three states of §10 are decided here, because a View may not call a Service
+6. `ContactField` SwiftUI component, all three states
+7. Paired `supplier` / `customer` accessors on `Product` and `Sale`, so R-02-5 is structural
+8. Tests for R-02-3 fallback and R-02-5 paired-nullability, against the fake

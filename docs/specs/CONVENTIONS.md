@@ -60,6 +60,10 @@ Each arrow is one-directional. Each layer may only call the one to its right.
 
 **`@Query` is banned in views.** It is idiomatic SwiftUI and it welds the view to the store, making rules untestable. This is a recorded trade-off (ADR-03), not an oversight. Do not "fix" it.
 
+**A framework type never crosses a module boundary.** When a `Core/` folder exists to be the only place that knows about a framework — `Contacts`, `VisionKit` — that framework's types may not appear in its §7 exports. An exported `CNAuthorizationStatus` forces `import Contacts` back onto every caller *and every fake*, which is the exact coupling the folder was created to prevent. Export a type the module owns instead (`ContactAccess`). Added session 2.
+
+**A read-only screen never raises a permission prompt.** Permission is asked at the moment the operator asked for the thing that needs it, never as a side effect of rendering a screen they only wanted to read. Added session 2.
+
 ---
 
 ## SwiftData rules — violating these breaks iCloud silently

@@ -18,7 +18,8 @@ struct JustScanApp: App {
             let modelContainer = try PersistenceController.container()
             let container = AppContainer(
                 modelContainer: modelContainer,
-                scanner: ScannerService()
+                scanner: ScannerService(),
+                contacts: ContactService()
             )
             #if DEBUG
             container.loadSeedIfNeeded()

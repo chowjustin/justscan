@@ -59,6 +59,10 @@ App/
 Xcode target's `INFOPLIST_FILE` points there, and the file is the one member
 excluded from the synchronized group.
 
+**Why `ContactPickerPresenter`, not `ContactPickerView`.** Identical reasoning to
+the scanner below, and the same conclusion reached in session 2: the export is
+`pick() async -> ContactRef?`, a value a ViewModel awaits.
+
 **Why `BarcodeScanPresenter`, not `DataScannerView`.** This file was specced as a
 `UIViewControllerRepresentable`. It is a presenter instead, because the exported
 contract is `ScannerServicing.scan() async throws -> String?` — a value a
@@ -92,9 +96,11 @@ Core/
 │   ├── ScannerService.swift           protocol + concrete
 │   └── BarcodeScanPresenter.swift     DataScannerViewController wrapper
 ├── Contacts/                          ← module 02. ONLY folder importing Contacts.
-│   ├── ContactRef.swift
+│   ├── ContactRef.swift               value type + the R-02-3 fallback chain
+│   ├── ContactAccess.swift            the status, without CNAuthorizationStatus
 │   ├── ContactService.swift           protocol + concrete
-│   ├── ContactPickerView.swift        CNContactPickerViewController wrapper
+│   ├── ContactPickerPresenter.swift   CNContactPickerViewController wrapper
+│   ├── ContactFieldViewModel.swift    decides the three states of 02 §10
 │   └── ContactField.swift             the shared 3-state row (03 and 04 both embed it)
 ├── Stock/                             ← owned by 03, lives in Core because 04 calls it
 │   ├── StockReason.swift
@@ -161,7 +167,11 @@ JustScanTests/
 ├── Core/
 │   ├── RpTests.swift                   R-01-2 — the five exact strings
 │   ├── BarcodeKindTests.swift          R-01-8 — the five exact classifications
-│   └── JakartaDayTests.swift           run with TZ=UTC. This one catches real bugs.
+│   ├── JakartaDayTests.swift           run with TZ=UTC. This one catches real bugs.
+│   ├── ContactRefTests.swift           R-02-3 fallback chain, R-02-5 pairing
+│   ├── ContactServiceContractTests.swift  the §7 contract 03 and 04 are written against
+│   ├── ContactFieldViewModelTests.swift   the three states of 02 §10
+│   └── ContactHostMappingTests.swift   R-02-1 / R-02-5 through a real store, AC-02-8
 ├── Catalogue/
 │   ├── CatalogueServiceTests.swift     R-03-1..5, R-03-12, R-03-14
 │   └── StockServiceTests.swift         R-03-6..11, R-03-13 — the ledger arithmetic

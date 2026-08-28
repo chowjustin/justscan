@@ -55,6 +55,9 @@ Interview closed with no open questions. Any `⚠️ OPEN` marker that appears i
 
 | Date | Reversal |
 |---|---|
+| 2026-08-28 | `02 §7`'s `authorizationStatus: CNAuthorizationStatus`. Naming a Contacts type in the export forces `import Contacts` on every caller *and every conformance* — the test fake included — which makes AC-02-7 unsatisfiable by construction, and defeats the reason the module exists. Replaced by `ContactAccess`, owned by `Core/Contacts/`. |
+| 2026-08-28 | `02 §3`'s "Found → open the contact card". Presenting `CNContactViewController` requires `descriptorForRequiredKeys()` — phone numbers, emails, postal addresses — which R-02-6 forbids and §1 lists as a non-goal. §10's Filled state defined no tap action either. Changing a supplier is detach-then-pick. |
+| 2026-08-28 | `STRUCTURE.md`'s `ContactPickerView.swift` as a `UIViewControllerRepresentable`, for the same reason `DataScannerView` was reversed in session 1: the export is `pick() async -> ContactRef?`. Replaced by `ContactPickerPresenter.swift`. |
 | 2026-08-28 | `01 §1`'s "no persistence models" non-goal. It could not survive its own §5, which names all four `@Model` types in the `Schema`, nor AC-01-6 and AC-01-8, which insert and seed them. Session 1 now declares the four types as **storage only** — zero behaviour, every rule still owned by 03 and 04. |
 | 2026-08-28 | `01 §1`'s "the capability stays off". Contradicted by `CLOUDKIT_CHECKLIST.md` Part 4 and by the repo's own entitlements, which already declared `iCloud.chow.JustScan`. Superseded by D-18: CloudKit on from session 1, with R-01-9's local-only fallback so it can never stop the shop trading. |
 | 2026-08-28 | `STRUCTURE.md`'s `DataScannerView.swift` as a `UIViewControllerRepresentable`. The exported contract is `scan() async throws -> String?`, which a representable cannot satisfy without moving scanner lifetime into the view. Replaced by `BarcodeScanPresenter.swift`. |

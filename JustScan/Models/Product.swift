@@ -35,6 +35,18 @@ import SwiftData
     @Relationship(deleteRule: .cascade, inverse: \StockMovement.product)
     var movements: [StockMovement]? = []
 
+    /// R-02-1 and R-02-5: the two supplier columns are read and written as one
+    /// value, so an ID without a name — or a name without an ID — is not a state
+    /// this model can be left in. Owned by module 02; the columns above are
+    /// still plain storage.
+    var supplier: ContactRef? {
+        get { ContactRef.paired(id: supplierContactID, name: supplierName) }
+        set {
+            supplierContactID = newValue?.id
+            supplierName = newValue?.name
+        }
+    }
+
     init(
         id: UUID = UUID(),
         name: String = "",

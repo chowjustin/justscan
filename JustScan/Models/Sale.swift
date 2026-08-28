@@ -57,6 +57,15 @@ enum SaleStatus: String, CaseIterable, Sendable {
         SaleStatus(rawValue: statusRaw) ?? .completed
     }
 
+    /// R-02-1 and R-02-5, customer side. Identical pairing to `Product.supplier`.
+    var customer: ContactRef? {
+        get { ContactRef.paired(id: customerContactID, name: customerName) }
+        set {
+            customerContactID = newValue?.id
+            customerName = newValue?.name
+        }
+    }
+
     init(
         id: UUID = UUID(),
         number: String = "",

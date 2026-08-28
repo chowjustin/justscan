@@ -19,6 +19,7 @@ import SwiftUI
 final class AppContainer {
     let modelContainer: ModelContainer
     let scanner: ScannerServicing
+    let contacts: ContactServicing
 
     /// The single context every repository shares, so one `save()` commits a
     /// whole business operation (see `ProductRepository.save()`).
@@ -27,9 +28,14 @@ final class AppContainer {
     let products: ProductRepository
     let stockMovements: StockMovementRepository
 
-    init(modelContainer: ModelContainer, scanner: ScannerServicing) {
+    init(
+        modelContainer: ModelContainer,
+        scanner: ScannerServicing,
+        contacts: ContactServicing
+    ) {
         self.modelContainer = modelContainer
         self.scanner = scanner
+        self.contacts = contacts
 
         let context = ModelContext(modelContainer)
         self.context = context
