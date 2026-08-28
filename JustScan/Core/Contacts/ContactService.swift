@@ -41,7 +41,14 @@ final class ContactService: ContactServicing {
         case .authorized:            return .granted
         case .notDetermined:         return .notDetermined
         case .denied, .restricted:   return .denied
-        @unknown default:            return .granted  // iOS 18 `.limited`
+
+        // iOS 18's limited access. A lookup is attempted and a contact outside
+        // the granted set simply reads as gone, which is the state `resolve`
+        // already returns nil for — so it maps to `.granted`, not `.denied`
+        // (R-02-4, and `ContactAccess.granted`'s own doc comment).
+        case .limited:               return .granted
+
+        @unknown default:            return .granted
         }
     }
 

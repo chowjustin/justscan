@@ -92,6 +92,10 @@ Budget the remaining days for polish, the three ADRs, and the golden path run �
 | 05 | `PaymentMethod.label` and `.icon` live in `SaleRow.swift` | Operator-facing strings next to the only thing that renders them — the precedent 03 set with `StockReason.label` in `StockMovementRow.swift`. Raw values stay English. | No — §10 already names the two icons and §11 the two labels |
 | 05 | `RootTabView.PlaceholderScreen` deleted | Riwayat was its last call site. Dead code, removed with the tab it stood in for. | No |
 
+| — | `TARGETED_DEVICE_FAMILY` `"1,2"` → `1`, and `CURRENT_PROJECT_VERSION` → 3 | App Store Connect rejected build 2 with `ITMS-90474`: a portrait-only binary may not also target iPad, which must support all four orientations for multitasking. Portrait-only is `CONVENTIONS.md`'s standing rule and the sale screen is a one-handed phone layout, so the device family gave way, not the orientation. The build number has to clear the rejected 2. | Yes — **D-19** added to `DECISIONS.md`, `CONVENTIONS.md` §UI rewritten |
+| — | `ContactService.access(for:)` handles `.limited` explicitly | iOS 18 added a known case to `CNAuthorizationStatus`, so `@unknown default` no longer covered it and the compiler warned. It maps to `.granted`, which is what the `@unknown default` already did and what `ContactAccess.granted`'s own doc comment describes — a contact outside the granted set reads as gone, which `resolve` already returns nil for (R-02-4). Behaviour unchanged; the intent is now stated. | No — 02 §5 already documents `.granted` as covering limited access |
+| — | `CompletedSale` in `CartView.swift` is `nonisolated` | The target builds with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which put the wrapper's initialiser on the main actor while `Binding(get:set:)` calls its getter from a synchronous nonisolated context. The wrapper reads one `UUID` off a value handed to it, so it has no isolation to need. | No — presentation detail, behaviour unchanged |
+
 Record every deviation here the moment it happens. An undocumented deviation is how a codebase stops matching its spec.
 
 ## Open questions raised during build

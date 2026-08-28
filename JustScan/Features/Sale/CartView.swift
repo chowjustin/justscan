@@ -227,7 +227,13 @@ struct CartView: View {
 }
 
 /// Identity for the success cover.
-private struct CompletedSale: Identifiable {
+///
+/// `nonisolated` because the target builds with `SWIFT_DEFAULT_ACTOR_ISOLATION
+/// = MainActor`, which would otherwise put this initialiser on the main actor —
+/// and `Binding(get:set:)` calls its getter from a synchronous *nonisolated*
+/// context. The wrapper reads one `UUID` off a value it was handed and touches
+/// nothing else, so it has no isolation to need.
+private nonisolated struct CompletedSale: Identifiable {
     let sale: Sale
     var id: UUID { sale.id }
 

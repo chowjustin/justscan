@@ -23,6 +23,7 @@ Append-only. Never edit a locked row — supersede it with a new one and note th
 | D-15 | `SaleLine` snapshots name and price; `productID` is a weak `UUID?`, not a relationship | A product edit or deletion must be structurally incapable of altering financial history | 2026-08-21 | 03, 04, 05 |
 | D-16 | All day boundaries are Asia/Jakarta | Grouping on UTC splits a trading day in half | 2026-08-21 | 04, 05 |
 | D-17 | Sale numbers are `{YYYYMMDD}-{NNN}`, no gaps, no reuse; voided sales keep their number | A gap in a receipt sequence is indistinguishable from a hidden sale | 2026-08-21 | 04 |
+| D-19 | **iPhone only** (`TARGETED_DEVICE_FAMILY = 1`), keeping portrait-only | Found by an App Store Connect rejection, not by reading: `ITMS-90474` refuses a portrait-only binary that also targets iPad, which must support all four orientations for multitasking. `"1,2"` was the Xcode default nobody changed; iPad was never designed for — the sale screen's bottom-third layout is one-handed-at-a-counter, and `UIRequiresFullScreen` is the wrong escape hatch because Apple is retiring it. Consequence accepted: the app cannot be installed on iPad. | 2026-08-28 | all |
 | D-18 | CloudKit is enabled from session 1, not at the end | An incompatible schema still compiles; the failure only arrives when a CloudKit-backed store loads (`NSCocoaErrorDomain 134060`). Enabling it on day one makes every launch a schema validation. Supersedes the "capability stays off" line in 01 §1. | 2026-08-28 | 01, all |
 
 ## Deferred (Later)

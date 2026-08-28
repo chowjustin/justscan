@@ -114,7 +114,15 @@ Uniqueness lives in the repository. `ProductRepository.findBy(barcode:)` before 
 | Money on screen | `Rp.format(_:)`, never string interpolation |
 | A dismissable sheet | A visible system Cancel button. Never a modal the operator can be trapped in. |
 
-Dynamic Type is supported everywhere; the sale screen must stay usable at XL sizes. Portrait only.
+Dynamic Type is supported everywhere; the sale screen must stay usable at XL sizes. **Portrait only, iPhone only.**
+
+The two go together and are one decision, not two (D-19). Apple permits a
+portrait-only iPhone app; an iPad build must support all four orientations for
+multitasking, and rejects the upload otherwise (`ITMS-90474`). The sale screen
+puts its total and buttons in the bottom third to be reachable one-handed at a
+counter — that is a phone layout, so `TARGETED_DEVICE_FAMILY = 1`. Do not add
+iPad back without also reversing "Portrait only" and auditing every screen in
+landscape.
 
 ---
 
