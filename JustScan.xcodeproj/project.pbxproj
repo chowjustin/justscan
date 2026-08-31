@@ -346,6 +346,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = JustScan/Info.plist;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "JustScan menggunakan kamera untuk memindai barcode produk.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "JustScan menggunakan kontak untuk memilih supplier dan pelanggan.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -382,6 +383,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = JustScan/Info.plist;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "JustScan menggunakan kamera untuk memindai barcode produk.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "JustScan menggunakan kontak untuk memilih supplier dan pelanggan.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
